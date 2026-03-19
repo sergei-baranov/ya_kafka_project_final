@@ -1,0 +1,61 @@
+[req]
+prompt = no
+distinguished_name = dn
+default_md = sha256
+default_bits = 4096
+req_extensions = v3_req
+
+[dn]
+countryName = RU
+organizationName = Woo
+organizationalUnitName = Zoo
+localityName = Moscow
+commonName = kafka
+
+[v3_ca]
+subjectKeyIdentifier = hash
+basicConstraints = critical,CA:true
+authorityKeyIdentifier = keyid:always,issuer:always
+keyUsage = critical,keyCertSign,cRLSign
+
+[v3_req]
+subjectKeyIdentifier = hash
+basicConstraints = CA:FALSE
+nsComment = "OpenSSL Generated Certificate"
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth, clientAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.0  = localhost
+DNS.1  = ${SC_1_NAME}
+DNS.2  = ${SC_1_NAME}-external
+DNS.3  = ${SC_2_NAME}
+DNS.4  = ${SC_2_NAME}-external
+DNS.5  = ${SC_3_NAME}
+DNS.6  = ${SC_3_NAME}-external
+DNS.7  = ${SB_1_NAME}
+DNS.8  = ${SB_1_NAME}-external
+DNS.9  = ${SB_2_NAME}
+DNS.10 = ${SB_2_NAME}-external
+DNS.11 = ${SB_3_NAME}
+DNS.12 = ${SB_3_NAME}-external
+DNS.13 = ${MC_1_NAME}
+DNS.14 = ${MC_1_NAME}-external
+DNS.15 = ${MC_2_NAME}
+DNS.16 = ${MC_2_NAME}-external
+DNS.17 = ${MC_3_NAME}
+DNS.18 = ${MC_3_NAME}-external
+DNS.19 = ${MB_1_NAME}
+DNS.20 = ${MB_1_NAME}-external
+DNS.21 = ${MB_2_NAME}
+DNS.22 = ${MB_2_NAME}-external
+DNS.23 = ${MB_3_NAME}
+DNS.24 = ${MB_3_NAME}-external
+DNS.25 = ${SERVICE_TOPIC_CREATOR_NAME}
+DNS.26 = ${SERVICE_TOPIC_CREATOR_NAME}-external
+DNS.27 = ${SERVICE_MIRROR_MAKER_NAME}
+DNS.28 = ${SERVICE_MIRROR_MAKER_NAME}-external
+DNS.29 = ${SERVICE_KAFKA_UI_NAME}
+IP.0   = 127.0.0.1
+IP.1   = 192.168.100.225
