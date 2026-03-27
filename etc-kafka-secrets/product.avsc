@@ -1,0 +1,64 @@
+{
+  "type": "record",
+  "name": "Product",
+  "namespace": "com.shop.inventory",
+  "fields": [
+    { "name": "product_id", "type": "string" },
+    { "name": "name", "type": "string" },
+    {
+      "name": "price",
+      "type": {
+        "type": "record",
+        "name": "Price",
+        "fields": [
+          { "name": "amount", "type": "double" },
+          { "name": "currency", "type": "string" }
+        ]
+      }
+    },
+    {
+      "name": "stock",
+      "type": {
+        "type": "record",
+        "name": "Stock",
+        "fields": [
+          { "name": "available", "type": "int" },
+          { "name": "reserved", "type": "int" }
+        ]
+      }
+    },
+    { "name": "sku", "type": "string" },
+    { "name": "store_id", "type": "string" },
+    { "name": "created_at", "type": "string" },
+    { "name": "updated_at", "type": "string" },
+    { "name": "description", "type": ["null", "string"], "default": null },
+    { "name": "category", "type": ["null", "string"], "default": null },
+    { "name": "brand", "type": ["null", "string"], "default": null },
+    { 
+      "name": "tags", 
+      "type": ["null", { "type": "array", "items": "string" }], 
+      "default": null 
+    },
+    { 
+      "name": "images", 
+      "type": ["null", { 
+        "type": "array", 
+        "items": {
+          "type": "record",
+          "name": "Image",
+          "fields": [
+            { "name": "url", "type": "string" },
+            { "name": "alt", "type": "string" }
+          ]
+        }
+      }], 
+      "default": null 
+    },
+    { 
+      "name": "specifications", 
+      "type": ["null", { "type": "map", "values": "string" }], 
+      "default": null 
+    },
+    { "name": "index", "type": ["null", "string"], "default": null }
+  ]
+}

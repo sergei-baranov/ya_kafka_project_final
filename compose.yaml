@@ -1,8 +1,14 @@
+# NB: во всех сервисах прописана инструкция
+# env_file:
+#   - ${ENV_PATH:-.env}
+#, поэтому ENV_PATH должна быть определёна
+# во всех используемых через --env-file файлах
+
 x-controller-resources:
   &controller-resources
   resources:
     limits:
-      cpus: '${CONTROLLER_LIMIT_CPUS}'
+      # cpus: '${CONTROLLER_LIMIT_CPUS}'
       memory: ${CONTROLLER_LIMIT_MEMORY}
     reservations:
       cpus: '${CONTROLLER_RESERVE_CPUS}'
@@ -12,7 +18,7 @@ x-broker-resources:
   &broker-resources
   resources:
     limits:
-      cpus: '${BROKER_LIMIT_CPUS}'
+      # cpus: '${BROKER_LIMIT_CPUS}'
       memory: ${BROKER_LIMIT_MEMORY}
     reservations:
       cpus: '${BROKER_RESERVE_CPUS}'
@@ -53,9 +59,9 @@ x-kafka_controller:
 
   # SSL Config
   KAFKA_SSL_SECRETS_DIR: /etc/kafka/secrets
-  KAFKA_SSL_TRUSTSTORE_LOCATION: /etc/kafka/secrets/kafka.truststore.jks
-  KAFKA_SSL_KEYSTORE_TYPE: PKCS12
-  KAFKA_SSL_KEYSTORE_LOCATION: /etc/kafka/secrets/kafka.keystore.pkcs12
+  KAFKA_SSL_TRUSTSTORE_LOCATION: ${CONTAINER_PATH_TRUSTSTORE}
+  KAFKA_SSL_KEYSTORE_TYPE: ${KEYSTORE_TYPE}
+  KAFKA_SSL_KEYSTORE_LOCATION: ${CONTAINER_PATH_KEYSTORE}
   # креды указываем через _PASSWORD, через _CREDENTIALS не хочет
   KAFKA_SSL_TRUSTSTORE_PASSWORD: ${KAFKA_TRUSTSTORE_CREDS}
   KAFKA_SSL_KEYSTORE_PASSWORD: ${KAFKA_KEYSTORE_CREDS}
@@ -71,7 +77,7 @@ x-kafka_controller:
   # ACL Config
   KAFKA_AUTHORIZER_CLASS_NAME: org.apache.kafka.metadata.authorizer.StandardAuthorizer
   KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: false
-  KAFKA_SUPER_USERS: User:admin;User:kafka_controller;User:kafka_broker
+  KAFKA_SUPER_USERS: User:${SASL_UNAME_ADMIN};User:${SASL_UNAME_KAFKA_CONTROLLER};User:${SASL_UNAME_KAFKA_BROKER} # ;User:${SASL_UNAME_SCHEMA_REGISTRY}
 
 x-controller-entry-write-secrets:
   &controller-entrypoint-with-secrets
@@ -98,12 +104,12 @@ x-controller-entry-write-secrets:
             username="${SASL_UNAME_ADMIN}" \
             password="${SASL_PWD_ADMIN}";
 
-        ssl.truststore.location=/etc/kafka/secrets/kafka.truststore.jks
+        ssl.truststore.location=${CONTAINER_PATH_TRUSTSTORE}
         ssl.truststore.password=${KAFKA_TRUSTSTORE_CREDS}
 
-        ssl.keystore.location=/etc/kafka/secrets/kafka.keystore.pkcs12
-        ssl.keystore.password=${KAFKA_SSLKEY_CREDS}
-        ssl.key.password=${KAFKA_KEYSTORE_CREDS}
+        ssl.keystore.location=${CONTAINER_PATH_KEYSTORE}
+        ssl.keystore.password=${KAFKA_KEYSTORE_CREDS}
+        ssl.key.password=${KAFKA_SSLKEY_CREDS}
         EOF
 
         # Права для пользователя 1000 (appuser в Ubuntu)
@@ -124,11 +130,22 @@ x-controller-entry-write-secrets:
 x-kafka_broker:
   &kafka_broker-env
   KAFKA_PROCESS_ROLES: broker
+
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+  #KAFKA_TRANSACTION_STATE_LOG_NUM_PARTITIONS: ${TRANSACTION_STATE_PARTITIONS}
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+  #KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS: ${TRANSACTION_STATE_PARTITIONS}
+  KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+  KAFKA_TRANSACTIONAL_ID_EXPIRATION_MS: 604800000
+  KAFKA_TRANSACTION_PARTITION_VERIFICATION_ENABLE: "false"
+  KAFKA_PRODUCER_ID_EXPIRATION_MS: 86400000
+
   KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: BROKER:SASL_SSL,CONTROLLER:SASL_SSL,INTERNAL:SASL_SSL
   KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
   KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
   # в след. строке можно на время разработки выставить true просто для удобства демо-проекта
-  KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
+  KAFKA_AUTO_CREATE_TOPICS_ENABLE: false
   KAFKA_AUTO_LEADER_REBALANCE_ENABLE: true
   KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: false
   KAFKA_REPLICATION_QUOTA_WINDOW_NUM: 11
@@ -140,9 +157,9 @@ x-kafka_broker:
 
   # SSL Config
   KAFKA_SSL_SECRETS_DIR: /etc/kafka/secrets
-  KAFKA_SSL_TRUSTSTORE_LOCATION: /etc/kafka/secrets/kafka.truststore.jks
-  KAFKA_SSL_KEYSTORE_TYPE: PKCS12
-  KAFKA_SSL_KEYSTORE_LOCATION: /etc/kafka/secrets/kafka.keystore.pkcs12
+  KAFKA_SSL_TRUSTSTORE_LOCATION: ${CONTAINER_PATH_TRUSTSTORE}
+  KAFKA_SSL_KEYSTORE_TYPE: ${KEYSTORE_TYPE}
+  KAFKA_SSL_KEYSTORE_LOCATION: ${CONTAINER_PATH_KEYSTORE}
   # креды указываем через _PASSWORD, через _CREDENTIALS не хочет
   KAFKA_SSL_TRUSTSTORE_PASSWORD: ${KAFKA_TRUSTSTORE_CREDS}
   KAFKA_SSL_KEYSTORE_PASSWORD: ${KAFKA_KEYSTORE_CREDS}
@@ -158,7 +175,7 @@ x-kafka_broker:
   # ACL Config
   KAFKA_AUTHORIZER_CLASS_NAME: org.apache.kafka.metadata.authorizer.StandardAuthorizer
   KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: false
-  KAFKA_SUPER_USERS: User:admin;User:kafka_controller;User:kafka_broker
+  KAFKA_SUPER_USERS: User:${SASL_UNAME_ADMIN};User:${SASL_UNAME_KAFKA_CONTROLLER};User:${SASL_UNAME_KAFKA_BROKER} # ;User:${SASL_UNAME_SCHEMA_REGISTRY}
 
 x-broker-entry-write-secrets:
   &broker-entrypoint-with-secrets
@@ -174,10 +191,12 @@ x-broker-entry-write-secrets:
             password="${SASL_PWD_KAFKA_BROKER}"
             user_${SASL_UNAME_ADMIN}="${SASL_PWD_ADMIN}"
             user_${SASL_UNAME_KAFKA_CONTROLLER}="${SASL_PWD_KAFKA_CONTROLLER}"
+            user_${SASL_UNAME_KAFKA_BROKER}="${SASL_PWD_KAFKA_BROKER}"
             user_${SASL_UNAME_KAFKA_UI}="${SASL_PWD_KAFKA_UI}"
+            user_${SASL_UNAME_KAFKA_CONNECT}="${SASL_PWD_KAFKA_CONNECT}"
+            user_${SASL_UNAME_KAFKA_CONNECT}="${SASL_PWD_KAFKA_CONNECT}"
             user_${SASL_UNAME_PRODUCER}="${SASL_PWD_PRODUCER}"
-            user_${SASL_UNAME_CONSUMER}="${SASL_PWD_CONSUMER}"
-            user_${SASL_UNAME_KAFKA_BROKER}="${SASL_PWD_KAFKA_BROKER}";
+            user_${SASL_UNAME_SCHEMA_REGISTRY}="${SASL_PWD_SCHEMA_REGISTRY}";
         };
         EOF
 
@@ -188,12 +207,12 @@ x-broker-entry-write-secrets:
             username="${SASL_UNAME_ADMIN}" \
             password="${SASL_PWD_ADMIN}";
 
-        ssl.truststore.location=/etc/kafka/secrets/kafka.truststore.jks
+        ssl.truststore.location=${CONTAINER_PATH_TRUSTSTORE}
         ssl.truststore.password=${KAFKA_TRUSTSTORE_CREDS}
 
-        ssl.keystore.location=/etc/kafka/secrets/kafka.keystore.pkcs12
-        ssl.keystore.password=${KAFKA_SSLKEY_CREDS}
-        ssl.key.password=${KAFKA_KEYSTORE_CREDS}
+        ssl.keystore.location=${CONTAINER_PATH_KEYSTORE}
+        ssl.keystore.password=${KAFKA_KEYSTORE_CREDS}
+        ssl.key.password=${KAFKA_SSLKEY_CREDS}
 
         # Игнорировать проверку имени хоста
         # ssl.endpoint.identification.algorithm=
@@ -230,6 +249,8 @@ services:
     image: ${IMAGE}
     container_name: ${SC_1_NAME}
     hostname: ${SC_1_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
     ports:
       - ${SC_1_PORT_90}:${SC_1_PORT_90}
       - ${SC_1_PORT_91}:${SC_1_PORT_91}
@@ -254,6 +275,8 @@ services:
     image: ${IMAGE}
     container_name: ${SC_2_NAME}
     hostname: ${SC_2_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
     ports:
       - ${SC_2_PORT_90}:${SC_2_PORT_90}
       - ${SC_2_PORT_91}:${SC_2_PORT_91}
@@ -278,6 +301,8 @@ services:
     image: ${IMAGE}
     container_name: ${SC_3_NAME}
     hostname: ${SC_3_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
     ports:
       - ${SC_3_PORT_90}:${SC_3_PORT_90}
       - ${SC_3_PORT_91}:${SC_3_PORT_91}
@@ -304,6 +329,8 @@ services:
     image: ${IMAGE}
     container_name: ${SB_1_NAME}
     hostname: ${SB_1_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
     ports:
       - ${SB_1_PORT_90}:${SB_1_PORT_90}
       - ${SB_1_PORT_91}:${SB_1_PORT_91}
@@ -329,6 +356,8 @@ services:
     image: ${IMAGE}
     container_name: ${SB_2_NAME}
     hostname: ${SB_2_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
     ports:
       - ${SB_2_PORT_90}:${SB_2_PORT_90}
       - ${SB_2_PORT_91}:${SB_2_PORT_91}
@@ -354,6 +383,8 @@ services:
     image: ${IMAGE}
     container_name: ${SB_3_NAME}
     hostname: ${SB_3_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
     ports:
       - ${SB_3_PORT_90}:${SB_3_PORT_90}
       - ${SB_3_PORT_91}:${SB_3_PORT_91}
@@ -383,6 +414,8 @@ services:
     image: ${IMAGE}
     container_name: ${MC_1_NAME}
     hostname: ${MC_1_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
     ports:
       - ${MC_1_PORT_90}:${MC_1_PORT_90}
       - ${MC_1_PORT_91}:${MC_1_PORT_91}
@@ -407,6 +440,8 @@ services:
     image: ${IMAGE}
     container_name: ${MC_2_NAME}
     hostname: ${MC_2_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
     ports:
       - ${MC_2_PORT_90}:${MC_2_PORT_90}
       - ${MC_2_PORT_91}:${MC_2_PORT_91}
@@ -431,6 +466,8 @@ services:
     image: ${IMAGE}
     container_name: ${MC_3_NAME}
     hostname: ${MC_3_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
     ports:
       - ${MC_3_PORT_90}:${MC_3_PORT_90}
       - ${MC_3_PORT_91}:${MC_3_PORT_91}
@@ -457,6 +494,8 @@ services:
     image: ${IMAGE}
     container_name: ${MB_1_NAME}
     hostname: ${MB_1_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
     ports:
       - ${MB_1_PORT_90}:${MB_1_PORT_90}
       - ${MB_1_PORT_91}:${MB_1_PORT_91}
@@ -482,6 +521,8 @@ services:
     image: ${IMAGE}
     container_name: ${MB_2_NAME}
     hostname: ${MB_2_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
     ports:
       - ${MB_2_PORT_90}:${MB_2_PORT_90}
       - ${MB_2_PORT_91}:${MB_2_PORT_91}
@@ -507,6 +548,8 @@ services:
     image: ${IMAGE}
     container_name: ${MB_3_NAME}
     hostname: ${MB_3_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
     ports:
       - ${MB_3_PORT_90}:${MB_3_PORT_90}
       - ${MB_3_PORT_91}:${MB_3_PORT_91}
@@ -532,39 +575,8 @@ services:
     image: ${IMAGE}
     container_name: ${SERVICE_TOPIC_CREATOR_NAME}
     hostname: ${SERVICE_TOPIC_CREATOR_NAME}
-    depends_on:
-      - ${SC_1_NAME}
-      - ${SC_2_NAME}
-      - ${SC_3_NAME}
-      - ${SB_1_NAME}
-      - ${SB_2_NAME}
-      - ${SB_3_NAME}
-    command: >
-      bash -c "sleep 10 &&
-          ! kafka-topics --command-config /etc/kafka/secrets/admin-client.properties --bootstrap-server ${SB_1_NAME}:${SB_1_PORT_92} --list | grep -q '^${TOPIC_GOODS_FILTERED}$' &&
-          kafka-topics --command-config /etc/kafka/secrets/admin-client.properties --bootstrap-server ${SB_1_NAME}:${SB_1_PORT_92} --create --topic ${TOPIC_GOODS_FILTERED} --partitions 3 --replication-factor 3 || echo 'Stage topic already exists' &&
-          ! kafka-topics --command-config /etc/kafka/secrets/admin-client.properties --bootstrap-server ${MB_1_NAME}:${MB_1_PORT_92} --list | grep -q '^${TOPIC_GOODS_FILTERED}$' &&
-          kafka-topics --command-config /etc/kafka/secrets/admin-client.properties --bootstrap-server ${MB_1_NAME}:${MB_1_PORT_92} --create --topic ${TOPIC_GOODS_FILTERED} --partitions 3 --replication-factor 3 || echo 'Mart topic already exists'"
-    volumes:
-      - ./etc-kafka-secrets:/etc/kafka/secrets
-      - ${SERVICE_TOPIC_CREATOR_NAME}_data:/var/lib/kafka/data
-    networks:
-      - ${STAGE_CLUSTER_NETWORK}
-      - ${MART_CLUSTER_NETWORK}
-    deploy:
-      resources:
-        limits:
-          cpus: '${SERVICE_TOPIC_CREATOR_LIMIT_CPUS}'
-          memory: ${SERVICE_TOPIC_CREATOR_LIMIT_MEMORY}
-        reservations:
-          cpus: '${SERVICE_TOPIC_CREATOR_RESERVE_CPUS}'
-          memory: ${SERVICE_TOPIC_CREATOR_RESERVE_MEMORY}
-
-  # mirror-maker
-  mirror-maker:
-    image: ${IMAGE}
-    container_name: ${SERVICE_MIRROR_MAKER_NAME}
-    hostname: ${SERVICE_MIRROR_MAKER_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
     depends_on:
       - ${SC_1_NAME}
       - ${SC_2_NAME}
@@ -578,29 +590,196 @@ services:
       - ${MB_1_NAME}
       - ${MB_2_NAME}
       - ${MB_3_NAME}
-      - ${SERVICE_TOPIC_CREATOR_NAME}
+    command: >
+      bash -c "
+          sleep 20 &&
+          chmod +x /etc/kafka/secrets/setup-acls-stage.sh &&
+          /etc/kafka/secrets/setup-acls-stage.sh &&
+          chmod +x /etc/kafka/secrets/setup-acls-mart.sh &&
+          /etc/kafka/secrets/setup-acls-mart.sh &&
+          sleep 20"
+    volumes:
+      - ./etc-kafka-secrets:/etc/kafka/secrets
+      - ${SERVICE_TOPIC_CREATOR_NAME}_data:/var/lib/kafka/data
+    networks:
+      - ${STAGE_CLUSTER_NETWORK}
+      - ${MART_CLUSTER_NETWORK}
+    deploy:
+      resources:
+        limits:
+          # cpus: '${SERVICE_TOPIC_CREATOR_LIMIT_CPUS}'
+          memory: ${SERVICE_TOPIC_CREATOR_LIMIT_MEMORY}
+        reservations:
+          cpus: '${SERVICE_TOPIC_CREATOR_RESERVE_CPUS}'
+          memory: ${SERVICE_TOPIC_CREATOR_RESERVE_MEMORY}
+
+  # schema-registry
+  schema-registry:
+    image: ${IMAGE_SCHEMA_REGISTRY}
+    container_name: ${SERVICE_SCHEMA_REGISTRY_NAME}
+    hostname: ${SERVICE_SCHEMA_REGISTRY_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
+    depends_on:
+      topic-creation:
+        condition: service_completed_successfully
+    ports:
+      - "${SERVICE_SCHEMA_REGISTRY_REST_PORT_EXPOSE}:${SERVICE_SCHEMA_REGISTRY_REST_PORT}"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: ${SERVICE_SCHEMA_REGISTRY_NAME}
+      ## _schemas - дефалтное значение;
+      ## мы будем создавать топик и ACL-ы вручную (в сервисе topic-creation),
+      ## чтобы не давать неограниченные права реестру (см. README.md)
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC: "${SERVICE_SCHEMA_REGISTRY_KAFKASTORE_TOPIC}"
+      SCHEMA_REGISTRY_KAFKASTORE_GROUP_ID: "${SERVICE_SCHEMA_REGISTRY_KAFKASTORE_GROUP_ID}"
+      SCHEMA_REGISTRY_SCHEMA_REGISTRY_GROUP_ID: "${SERVICE_SCHEMA_REGISTRY_KAFKASTORE_GROUP_ID}"
+      # транзакционность и идемпотентность вообще не включаются никак, три дня убил на РнД (((
+      #SCHEMA_REGISTRY_KAFKASTORE_TRANSACTIONAL_ID: "${SERVICE_SCHEMA_REGISTRY_KAFKASTORE_TRANSACTIONAL_ID}"
+      ## фактор репликации <= количеству брокеров
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR: 3
+      ## ВСЕГДА должна быть 1-ца (а политика - COMPACT, это учесть в topic-creation)
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC_PARTITION_COUNT: 1
+      #SCHEMA_REGISTRY_KAFKASTORE_MAX_RETRIES: "20"
+      SCHEMA_REGISTRY_KAFKASTORE_ACK_ALL: "true"
+      #SCHEMA_REGISTRY_KAFKASTORE_ENABLE_IDEMPOTENCE: "true"
+      #SCHEMA_REGISTRY_KAFKASTORE_EXTRA_CONFIG: "enable.idempotence=true"
+      #SCHEMA_REGISTRY_KAFKASTORE_PRODUCER_ENABLE_IDEMPOTENCE: "true"
+      #SCHEMA_REGISTRY_OPTS: "-Dkafkastore.enable.idempotence=true"
+      SCHEMA_REGISTRY_DEBUG: true
+      #SCHEMA_REGISTRY_KAFKASTORE_ISOLATION_LEVEL: "read_committed"
+      #SCHEMA_REGISTRY_MASTER_ELIGIBILITY: "true"
+      #SCHEMA_REGISTRY_KAFAKSTORE_GROUP_ID: "${SERVICE_SCHEMA_REGISTRY_KAFKASTORE_GROUP_ID}"
+      #SCHEMA_REGISTRY_ELECTION_TYPE: "none"
+
+      #SCHEMA_REGISTRY_KAFKASTORE_INIT_TIMEOUT_MS: "90000"
+      #SCHEMA_REGISTRY_KAFKASTORE_WRITE_RETRY_BACKOFF_MS: "2000"
+      #SCHEMA_REGISTRY_KAFKASTORE_TIMEOUT_MS: "90000"
+      #SCHEMA_REGISTRY_KAFKASTORE_RETRY_BACKOFF_MS: "2000"
+      #SCHEMA_REGISTRY_KAFKASTORE_MAX_BLOCK_MS: "60000"
+
+      # https
+      SCHEMA_REGISTRY_LISTENERS: https://0.0.0.0:${SERVICE_SCHEMA_REGISTRY_REST_PORT}
+      # HTTPS для связи между нодами
+      # (их сейчас нет у schema-registry,
+      # но надо явно указать то же, что в SCHEMA_REGISTRY_LISTENERS)
+      SCHEMA_REGISTRY_INTER_INSTANCE_PROTOCOL: "https"
+      # полезно для HTTPS:
+      SCHEMA_REGISTRY_ACCESS_CONTROL_ALLOW_METHODS: GET,POST,PUT,OPTIONS
+      SCHEMA_REGISTRY_ACCESS_CONTROL_ALLOW_ORIGIN: "*"
+
+      # Настройки SSL (mTLS) для самого Schema Registry (Server Side)
+      SCHEMA_REGISTRY_SSL_TRUSTSTORE_TYPE: "${TRUSTSTORE_TYPE}"
+      SCHEMA_REGISTRY_SSL_TRUSTSTORE_LOCATION: ${CONTAINER_PATH_TRUSTSTORE}
+      SCHEMA_REGISTRY_SSL_TRUSTSTORE_PASSWORD: ${KAFKA_TRUSTSTORE_CREDS}
+      SCHEMA_REGISTRY_SSL_KEYSTORE_TYPE: "${KEYSTORE_TYPE}"
+      SCHEMA_REGISTRY_SSL_KEYSTORE_LOCATION: ${CONTAINER_PATH_KEYSTORE}
+      SCHEMA_REGISTRY_SSL_KEYSTORE_PASSWORD: ${KAFKA_KEYSTORE_CREDS}
+      SCHEMA_REGISTRY_SSL_KEY_PASSWORD: ${KAFKA_SSLKEY_CREDS}
+      # Jetty хочет true/false, не required/none
+      SCHEMA_REGISTRY_SSL_CLIENT_AUTH: "true" # "required" # "none|required": TLS|mTLS
+
+      # Настройки для связи с Kafka (Client Side)
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'SASL_SSL://${SB_1_NAME}:${SB_1_PORT_92},SASL_SSL://${SB_2_NAME}:${SB_2_PORT_92},SASL_SSL://${SB_3_NAME}:${SB_3_PORT_92}'
+      SCHEMA_REGISTRY_KAFKASTORE_SECURITY_PROTOCOL: SASL_SSL
+      SCHEMA_REGISTRY_KAFKASTORE_SASL_MECHANISM: PLAIN
+      SCHEMA_REGISTRY_KAFKASTORE_SASL_JAAS_CONFIG: "org.apache.kafka.common.security.plain.PlainLoginModule required username='${SASL_UNAME_SCHEMA_REGISTRY}' password='${SASL_PWD_SCHEMA_REGISTRY}';"
+      SCHEMA_REGISTRY_KAFKASTORE_SSL_TRUSTSTORE_TYPE: "${TRUSTSTORE_TYPE}"
+      SCHEMA_REGISTRY_KAFKASTORE_SSL_TRUSTSTORE_LOCATION: ${CONTAINER_PATH_TRUSTSTORE}
+      SCHEMA_REGISTRY_KAFKASTORE_SSL_TRUSTSTORE_PASSWORD: ${KAFKA_TRUSTSTORE_CREDS}
+      SCHEMA_REGISTRY_KAFKASTORE_SSL_KEYSTORE_TYPE: "${KEYSTORE_TYPE}"
+      SCHEMA_REGISTRY_KAFKASTORE_SSL_KEYSTORE_LOCATION: ${CONTAINER_PATH_KEYSTORE}
+      SCHEMA_REGISTRY_KAFKASTORE_SSL_KEYSTORE_PASSWORD: ${KAFKA_KEYSTORE_CREDS}
+      SCHEMA_REGISTRY_KAFKASTORE_SSL_KEY_PASSWORD: ${KAFKA_SSLKEY_CREDS}
+      SCHEMA_REGISTRY_KAFKASTORE_SSL_CLIENT_AUTH: "required" # "none|required": TLS|mTLS
+
+      # memory limits percentage
+      SCHEMA_REGISTRY_HEAP_OPTS: "${SERVICE_SCHEMA_REGISTRY_HEAP_OPTS}"
+    # command: /bin/sh -c "schema-registry-start /etc/schema-registry/schema-registry.properties"
+    volumes:
+      - ./etc-kafka-secrets:/etc/kafka/secrets
+      # - ./schema-registry.properties:/etc/schema-registry/schema-registry.properties
+      # - ...:/var/log/schema-registry
+    networks:
+      - ${STAGE_CLUSTER_NETWORK}
+    deploy:
+      resources:
+        limits:
+          # cpus: '${SERVICE_SCHEMA_REGISTRY_LIMIT_CPUS}'
+          memory: ${SERVICE_SCHEMA_REGISTRY_LIMIT_MEMORY}
+        reservations:
+          cpus: '${SERVICE_SCHEMA_REGISTRY_RESERVE_CPUS}'
+          memory: ${SERVICE_SCHEMA_REGISTRY_RESERVE_MEMORY}
+    # entrypoint: ["tail", "-f", "/dev/null"]
+
+  # schemas-registrator
+  schemas-registrator:
+    image: ${IMAGE}
+    container_name: ${SERVICE_SCHEMAS_REGISTRATOR_NAME}
+    hostname: ${SERVICE_SCHEMAS_REGISTRATOR_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
+    depends_on:
+      - ${SERVICE_SCHEMA_REGISTRY_NAME}
+    command: >
+      bash -c "
+          sleep 20 &&
+          echo 'Ждём готовности Schema Registry на ${SCHEMA_REGISTRY_REST_URL_INNER}...' &&
+          until curl -k -s -f --cert-type P12 --cert '${CONTAINER_PATH_KEYSTORE}:${KAFKA_KEYSTORE_CREDS}' '${SCHEMA_REGISTRY_REST_URL_INNER}/subjects'  > /dev/null; do
+            echo 'Schema Registry ещё не доступен, ждём 2 секунды...' &&
+            sleep 2;
+          done &&
+          chmod +x /etc/kafka/secrets/setup-schemas.sh &&
+          /etc/kafka/secrets/setup-schemas.sh"
+    volumes:
+      - ./etc-kafka-secrets:/etc/kafka/secrets
+      - ${SERVICE_SCHEMAS_REGISTRATOR_NAME}_data:/var/lib/kafka/data
+    networks:
+      - ${STAGE_CLUSTER_NETWORK}
+    deploy:
+      resources:
+        limits:
+          # cpus: '${SERVICE_SCHEMAS_REGISTRATOR_LIMIT_CPUS}'
+          memory: ${SERVICE_SCHEMAS_REGISTRATOR_LIMIT_MEMORY}
+        reservations:
+          cpus: '${SERVICE_SCHEMAS_REGISTRATOR_RESERVE_CPUS}'
+          memory: ${SERVICE_SCHEMAS_REGISTRATOR_RESERVE_MEMORY}
+
+  # mirror-maker
+  mirror-maker:
+    image: ${IMAGE}
+    container_name: ${SERVICE_MIRROR_MAKER_NAME}
+    hostname: ${SERVICE_MIRROR_MAKER_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
+    depends_on:
+      schemas-registrator:
+        condition: service_completed_successfully
     command: >
       bash -c "
           echo 'bootstrap.servers=${SB_1_NAME}:${SB_1_PORT_92}' > /tmp/consumer.properties &&
           echo 'group.id=mirror-maker-group' >> /tmp/consumer.properties &&
+          echo 'key.deserializer=org.apache.kafka.common.serialization.ByteArrayDeserializer' >> /tmp/consumer.properties &&
+          echo 'value.deserializer=org.apache.kafka.common.serialization.ByteArrayDeserializer' >> /tmp/consumer.properties &&
           echo 'security.protocol=SASL_SSL' >> /tmp/consumer.properties &&
           echo 'sasl.mechanism=PLAIN' >> /tmp/consumer.properties &&
           echo 'sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="${SASL_UNAME_ADMIN}" password="${SASL_PWD_ADMIN}";' >> /tmp/consumer.properties &&
-          echo 'ssl.truststore.location=/etc/kafka/secrets/kafka.truststore.jks' >> /tmp/consumer.properties &&
+          echo 'ssl.truststore.location=${CONTAINER_PATH_TRUSTSTORE}' >> /tmp/consumer.properties &&
           echo 'ssl.truststore.password=${KAFKA_TRUSTSTORE_CREDS}' >> /tmp/consumer.properties &&
-          echo 'ssl.keystore.location=/etc/kafka/secrets/kafka.keystore.pkcs12' >> /tmp/consumer.properties &&
-          echo 'ssl.keystore.password=${KAFKA_SSLKEY_CREDS}' >> /tmp/consumer.properties &&
-          echo 'ssl.key.password=${KAFKA_KEYSTORE_CREDS}' >> /tmp/consumer.properties &&
+          echo 'ssl.keystore.location=${CONTAINER_PATH_KEYSTORE}' >> /tmp/consumer.properties &&
+          echo 'ssl.keystore.password=${KAFKA_KEYSTORE_CREDS}' >> /tmp/consumer.properties &&
+          echo 'ssl.key.password=${KAFKA_SSLKEY_CREDS}' >> /tmp/consumer.properties &&
 
           echo 'bootstrap.servers=${MB_1_NAME}:${MB_1_PORT_92}' > /tmp/producer.properties &&
+          echo 'key.serializer=org.apache.kafka.common.serialization.ByteArraySerializer' >> /tmp/producer.properties &&
+          echo 'value.serializer=org.apache.kafka.common.serialization.ByteArraySerializer' >> /tmp/producer.properties &&
           echo 'security.protocol=SASL_SSL' >> /tmp/producer.properties &&
           echo 'sasl.mechanism=PLAIN' >> /tmp/producer.properties &&
           echo 'sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="${SASL_UNAME_ADMIN}" password="${SASL_PWD_ADMIN}";' >> /tmp/producer.properties &&
-          echo 'ssl.truststore.location=/etc/kafka/secrets/kafka.truststore.jks' >> /tmp/producer.properties &&
+          echo 'ssl.truststore.location=${CONTAINER_PATH_TRUSTSTORE}' >> /tmp/producer.properties &&
           echo 'ssl.truststore.password=${KAFKA_TRUSTSTORE_CREDS}' >> /tmp/producer.properties &&
-          echo 'ssl.keystore.location=/etc/kafka/secrets/kafka.keystore.pkcs12' >> /tmp/producer.properties &&
-          echo 'ssl.keystore.password=${KAFKA_SSLKEY_CREDS}' >> /tmp/producer.properties &&
-          echo 'ssl.key.password=${KAFKA_KEYSTORE_CREDS}' >> /tmp/producer.properties &&
+          echo 'ssl.keystore.location=${CONTAINER_PATH_KEYSTORE}' >> /tmp/producer.properties &&
+          echo 'ssl.keystore.password=${KAFKA_KEYSTORE_CREDS}' >> /tmp/producer.properties &&
+          echo 'ssl.key.password=${KAFKA_SSLKEY_CREDS}' >> /tmp/producer.properties &&
 
           kafka-mirror-maker --consumer.config /tmp/consumer.properties --producer.config /tmp/producer.properties --whitelist ${TOPIC_GOODS_FILTERED} --num.streams 1"
     volumes:
@@ -615,7 +794,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '${SERVICE_MIRROR_MAKER_LIMIT_CPUS}'
+          # cpus: '${SERVICE_MIRROR_MAKER_LIMIT_CPUS}'
           memory: ${SERVICE_MIRROR_MAKER_LIMIT_MEMORY}
         reservations:
           cpus: '${SERVICE_MIRROR_MAKER_RESERVE_CPUS}'
@@ -626,19 +805,11 @@ services:
     image: ${IMAGE_PROVECTUSLABS_KAFKA_UI}
     container_name: ${SERVICE_KAFKA_UI_NAME}
     hostname: ${SERVICE_KAFKA_UI_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
     depends_on:
-      - ${SC_1_NAME}
-      - ${SC_2_NAME}
-      - ${SC_3_NAME}
-      - ${SB_1_NAME}
-      - ${SB_2_NAME}
-      - ${SB_3_NAME}
-      - ${MC_1_NAME}
-      - ${MC_2_NAME}
-      - ${MC_3_NAME}
-      - ${MB_1_NAME}
-      - ${MB_2_NAME}
-      - ${MB_3_NAME}
+      schemas-registrator:
+        condition: service_completed_successfully
     ports:
       - "${SERVICE_KAFKA_UI_PORT_80}:8080"
     environment:
@@ -650,9 +821,9 @@ services:
       # KAFKA_CLUSTERS_0_PROPERTIES_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: ""
       KAFKA_CLUSTERS_0_PROPERTIES_SASL_MECHANISM: PLAIN
       KAFKA_CLUSTERS_0_PROPERTIES_SSL_SECRETS_DIR: /etc/kafka/secrets
-      KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_LOCATION: /etc/kafka/secrets/kafka.truststore.jks
-      KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_TYPE: PKCS12
-      KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_LOCATION: /etc/kafka/secrets/kafka.keystore.pkcs12
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_LOCATION: ${CONTAINER_PATH_TRUSTSTORE}
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_TYPE: ${KEYSTORE_TYPE}
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_LOCATION: ${CONTAINER_PATH_KEYSTORE}
       # креды указываем через _PASSWORD, через _CREDENTIALS не хочет
       KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_PASSWORD: ${KAFKA_TRUSTSTORE_CREDS}
       KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_PASSWORD: ${KAFKA_KEYSTORE_CREDS}
@@ -663,9 +834,9 @@ services:
       # KAFKA_CLUSTERS_1_PROPERTIES_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: ""
       KAFKA_CLUSTERS_1_PROPERTIES_SASL_MECHANISM: PLAIN
       KAFKA_CLUSTERS_1_PROPERTIES_SSL_SECRETS_DIR: /etc/kafka/secrets
-      KAFKA_CLUSTERS_1_PROPERTIES_SSL_TRUSTSTORE_LOCATION: /etc/kafka/secrets/kafka.truststore.jks
-      KAFKA_CLUSTERS_1_PROPERTIES_SSL_KEYSTORE_TYPE: PKCS12
-      KAFKA_CLUSTERS_1_PROPERTIES_SSL_KEYSTORE_LOCATION: /etc/kafka/secrets/kafka.keystore.pkcs12
+      KAFKA_CLUSTERS_1_PROPERTIES_SSL_TRUSTSTORE_LOCATION: ${CONTAINER_PATH_TRUSTSTORE}
+      KAFKA_CLUSTERS_1_PROPERTIES_SSL_KEYSTORE_TYPE: ${KEYSTORE_TYPE}
+      KAFKA_CLUSTERS_1_PROPERTIES_SSL_KEYSTORE_LOCATION: ${CONTAINER_PATH_KEYSTORE}
       # креды указываем через _PASSWORD, через _CREDENTIALS не хочет
       KAFKA_CLUSTERS_1_PROPERTIES_SSL_TRUSTSTORE_PASSWORD: ${KAFKA_TRUSTSTORE_CREDS}
       KAFKA_CLUSTERS_1_PROPERTIES_SSL_KEYSTORE_PASSWORD: ${KAFKA_KEYSTORE_CREDS}
@@ -707,12 +878,121 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '${SERVICE_KAFKA_UI_LIMIT_CPUS}'
+          # cpus: '${SERVICE_KAFKA_UI_LIMIT_CPUS}'
           memory: ${SERVICE_KAFKA_UI_LIMIT_MEMORY}
         reservations:
           cpus: '${SERVICE_KAFKA_UI_RESERVE_CPUS}'
           memory: ${SERVICE_KAFKA_UI_RESERVE_MEMORY}
 
+  kafka-connect:
+    container_name: ${SERVICE_KAFKA_CONNECT_NAME}
+    hostname: ${SERVICE_KAFKA_CONNECT_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
+    depends_on:
+      schemas-registrator:
+        condition: service_completed_successfully
+      mirror-maker:
+        condition: service_started
+      # - schema-registry
+    build:
+      context: ./kafka-connect
+      args:
+        - IMAGE_KAFKA_CONNECT=${IMAGE_KAFKA_CONNECT}
+    ports:
+      # REST API Kafka Connect
+      - "${SERVICE_KAFKA_CONNECT_REST_PORT_EXPOSE}:${SERVICE_KAFKA_CONNECT_REST_PORT}"
+      # JMX for Prometheus: 9875, 9876
+      # - "9875:9875"
+      # - "9876:9876"
+    deploy:
+      resources:
+        limits:
+          # cpus: '${SERVICE_KAFKA_CONNECT_LIMIT_CPUS}'
+          memory: ${SERVICE_KAFKA_CONNECT_LIMIT_MEMORY}
+        reservations:
+          cpus: '${SERVICE_KAFKA_CONNECT_RESERVE_CPUS}'
+          memory: ${SERVICE_KAFKA_CONNECT_RESERVE_MEMORY}
+    volumes:
+      - ./etc-kafka-secrets:/etc/kafka/secrets
+      - ./kafka-connect/data/shop_api_stage:/data/shop_api_stage
+      - ./kafka-connect/data/shop_api_error:/data/shop_api_error
+    networks:
+      - ${STAGE_CLUSTER_NETWORK}
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: ${SB_1_NAME}:${SB_1_PORT_92},${SB_2_NAME}:${SB_2_PORT_92},${SB_3_NAME}:${SB_3_PORT_92}
+      CONNECT_GROUP_ID: '${SERVICE_KAFKA_CONNECT_NAME}'
+      CONNECT_REST_PORT: ${SERVICE_KAFKA_CONNECT_REST_PORT}
+
+      CONNECT_REST_ADVERTISED_HOST_NAME: '${SERVICE_KAFKA_CONNECT_NAME}'
+      CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
+
+      CONNECT_CONFIG_STORAGE_TOPIC: "${TOPIC_CONNECT_CONFIG_STORAGE}"
+      CONNECT_OFFSET_STORAGE_TOPIC: "${TOPIC_CONNECT_OFFSET_STORAGE}"
+      CONNECT_STATUS_STORAGE_TOPIC: "${TOPIC_CONNECT_STATUS_STORAGE}"
+
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 3
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 3
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 3
+
+      CONNECT_KEY_CONVERTER: "org.apache.kafka.connect.storage.StringConverter"
+      CONNECT_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      # deprecated: CONNECT_INTERNAL_KEY_CONVERTER: "org.apache.kafka.connect.storage.StringConverter"
+      # deprecated: CONNECT_INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      # deprecated: CONNECT_INTERNAL_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+
+      # Настройки SSL/SASL для подключения к брокерам под connect_user
+      CONNECT_SECURITY_PROTOCOL: "SASL_SSL"
+      CONNECT_SASL_MECHANISM: "PLAIN"
+      CONNECT_SASL_JAAS_CONFIG: 'org.apache.kafka.common.security.plain.PlainLoginModule required username="${SASL_UNAME_KAFKA_CONNECT}" password="${SASL_PWD_KAFKA_CONNECT}";'
+
+      CONNECT_SSL_TRUSTSTORE_LOCATION: ${CONTAINER_PATH_TRUSTSTORE}
+      CONNECT_SSL_TRUSTSTORE_PASSWORD: ${KAFKA_TRUSTSTORE_CREDS}
+      CONNECT_SSL_KEYSTORE_TYPE: ${KEYSTORE_TYPE}
+      CONNECT_SSL_KEYSTORE_LOCATION: ${CONTAINER_PATH_KEYSTORE}
+      CONNECT_SSL_KEYSTORE_PASSWORD: ${KAFKA_KEYSTORE_CREDS}
+      CONNECT_SSL_KEY_PASSWORD: ${KAFKA_SSLKEY_CREDS}
+
+      # Настройки SSL/SASL для подключения к брокерам под connect_user
+      CONNECT_PRODUCER_SECURITY_PROTOCOL: "SASL_SSL"
+      CONNECT_PRODUCER_SASL_MECHANISM: "PLAIN"
+      CONNECT_PRODUCER_SASL_JAAS_CONFIG: 'org.apache.kafka.common.security.plain.PlainLoginModule required username="${SASL_UNAME_KAFKA_CONNECT}" password="${SASL_PWD_KAFKA_CONNECT}";'
+      
+      CONNECT_PRODUCER_SSL_TRUSTSTORE_LOCATION: ${CONTAINER_PATH_TRUSTSTORE}
+      CONNECT_PRODUCER_SSL_TRUSTSTORE_PASSWORD: ${KAFKA_TRUSTSTORE_CREDS}
+      CONNECT_PRODUCER_SSL_KEYSTORE_TYPE: ${KEYSTORE_TYPE}
+      CONNECT_PRODUCER_SSL_KEYSTORE_LOCATION: ${CONTAINER_PATH_KEYSTORE}
+      CONNECT_PRODUCER_SSL_KEYSTORE_PASSWORD: ${KAFKA_KEYSTORE_CREDS}
+      CONNECT_PRODUCER_SSL_KEY_PASSWORD: ${KAFKA_SSLKEY_CREDS}
+
+      CONNECT_PLUGIN_DISCOVERY: "only_scan"
+
+      # согласоввывай с SERVICE_KAFKA_CONNECT_LIMIT_MEMORY, etc.
+      KAFKA_HEAP_OPTS: "${SERVICE_KAFKA_CONNECT_HEAP_OPTS}"
+
+      # Export JMX metrics to :9876/metrics for Prometheus
+      # KAFKA_JMX_PORT: '9875'
+      # KAFKA_OPTS: "-javaagent:/opt/jmx_prometheus_javaagent-0.15.0.jar=9876:/opt/kafka-connect.yml"
+
+#  shop-api-app:
+#    build:
+#      context: ./shop-api-app
+#    container_name: ${SERVICE_SHOP_API_APP_NAME}
+#    hostname: ${SERVICE_SHOP_API_APP_NAME}
+#    env_file:
+#      - ${ENV_PATH:-.env}
+#    depends_on:
+#      - ${SERVICE_KAFKA_CONNECT_NAME}
+#    ports:
+#      - "6066-6077:6066-6077"
+#    volumes:
+#      - shop_api_app:/app
+#      - ./etc-kafka-secrets:/etc/kafka/secrets
+#    stdin_open: true
+#    tty: true
+#    networks:
+#      - ${STAGE_CLUSTER_NETWORK}
 
 networks:
   ya-kafka-pf-stage:
@@ -734,4 +1014,6 @@ volumes:
   mart-broker-2_data:
   mart-broker-3_data:
   topic-creation_data:
+  schemas-registrator_data:
   mirror-maker_data:
+  shop_api_app:
