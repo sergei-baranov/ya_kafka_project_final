@@ -211,7 +211,7 @@ tesla@tesla:/media/tesla/NETAC_4T/VCS/ya_kafka_project_final$
 Как-то так (предварительно).
 
 ---
-
+<div style="text-size:small;font-style:italic;">
 `goods-raw`, `goods-filtered`, `goods-dlq`, `goods-prohibited`
 
 - `goods-raw`: сюда пишет Kafka Connect
@@ -222,7 +222,7 @@ tesla@tesla:/media/tesla/NETAC_4T/VCS/ya_kafka_project_final$
 
 Топик `goods-raw` получает данные через т. наз. `SHOP API`: разворачиваем `Kafka Connect`, в нём коннектор чтения файлов из директории `shop_api_stage`.
 
-Как файлы попадают в эту директорию: `bash`- или `python`- скрипт `shop_api_emulator` имитирует поступление файлов в эту эмуляцию API, копируя их из директории `shop_api_fixtures` с какой-то периодичностью, "пара штук" файлов. Файлы предсозданы, лежат у нас в проекте в git, директория подключается `volume`-ом.
+Как файлы попадают в эту директорию: руками.... Ну или `bash`- или `python`- скрипт `shop_api_emulator` имитирует поступление файлов в эту эмуляцию API, копируя их из директории `shop_api_fixtures` с какой-то периодичностью, "пара штук" файлов. Файлы предсозданы, лежат у нас в проекте в git, директория подключается `volume`-ом.
 
 Faust-приложение фильтрует сообщения из `goods-raw`, хорошие отправляет в `goods-filtered`, остальные - в `goods-dlq` (развернуть Schema Registry и залить в него схему товаров) и `goods-prohibited` (прочитались, но не прошли `prohibited`-фильтр).
 
@@ -237,12 +237,8 @@ Faust-приложение для CLIENT API - это про другое, пр�
 Тестирование и отладка: Продумать...
 
 Чего нам надо добиться на этом этапе: `goods-filtered` на втором кластере, заполнен из файлов, по авро-схеме...
+</div>
 
-### Третья итерация: CLIENT API
-
-...
-
-### Четвёртая ...
 
 ## <a name="dev_proc_iteration_2">Разработка: Вторая итерация: SHOP API. Kafka Connect, Schema Registry, Faust.</a>
 
@@ -1183,4 +1179,40 @@ root@shop-api-app:/app# faust -A shop_api.app list-block-words
 
 Проверяем, что глупые товары поедут в топик `goods-prohibited`, остальные опять в `goods-filtered`.
 
-TODO
+На хостовой машине:
+
+```bash
+cp ./shop_api_fixtures/store_001_1.json ./kafka-connect/data/shop_api_stage
+cp ./shop_api_fixtures/store_001_2.json ./kafka-connect/data/shop_api_stage
+
+ls ./kafka-connect/data/shop_api_stage
+ls ./kafka-connect/data/shop_api_error
+
+sudo docker logs -n 10 shop-api-app
+
+2026-03-31 12:38:40,162 DEBG 'faust-worker' stderr output:
+[2026-03-31 12:38:40,162] [7] [INFO] SENT TO PROHIBITED: 123 (matched_words=['глуп']) 
+
+2026-03-31 12:38:40,164 DEBG 'faust-worker' stderr output:
+[2026-03-31 12:38:40,164] [7] [INFO] SENT TO FILTERED: 777 
+
+2026-03-31 12:38:40,164 DEBG 'faust-worker' stderr output:
+[2026-03-31 12:38:40,164] [7] [INFO] SENT TO PROHIBITED: 44 (matched_words=['глуп']) 
+```
+
+Проверяем в веб-интерфейсе Кафка ЮИ:
+
+`http://192.168.100.225:8070/ui/clusters/stage/all-topics/goods-prohibited/messages`:
+
+`DONE 26 ms 910 Bytes 3 messages consumed`
+
+| Offset | Partition | Timestamp | KeyPreview | ValuePreview |
+|--------|-----------|-----------|------------|--------------|
+| 0 | 0 | 3/31/2026, 15:38:29 |  | [][][][][]5552Глупые часы ABC... |
+| 1 | 0 | 3/31/2026, 15:38:40 |  | [][][][][]1232Глупые часы XYZ... |
+| 2 | 0 | 3/31/2026, 15:38:40 |  | [][][][][]44DГлупая колонка МММ... |
+
+---
+
+**Всё, SHOP API работает: дата-пайплайн проводит файлы из стейдж-директории через фильтры в топики на stahe-кластере и в топик на mart-кластере.**
+
