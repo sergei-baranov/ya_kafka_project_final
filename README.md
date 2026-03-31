@@ -7,7 +7,8 @@
 - [Разработка: Первая итерация: Два Kafka-кластера в репликации ведущий-ведомый. Mirror Maker.](#dev_proc_iteration_1)
 - [Разработка: Вторая итерация: SHOP API. Kafka Connect, Schema Registry, Faust.](#dev_proc_iteration_2)
   - [Kafka connect, source-коннектор shop-api-stage-reader (SpoolDirSchemaLessJsonSourceConnector)](#dev_proc_iteration_2_1)
-  - [Schema Registry, Faust-приложение](#dev_proc_iteration_2_2)
+  - [Schema Registry](#dev_proc_iteration_2_2)
+  - [Faust-приложение](#dev_proc_iteration_2_3)
 
 ## <a name="general_descr">Общее описание</a>
 
@@ -20,6 +21,14 @@
 - Далее следует поднять Schema Registry,
 - А вслед за ним - сервис, который зарегистрирует в Schema Registry необходимые для работы прочих сервисов схемы под необходимые топики (завершается после выполнения задания).
 - После этого можно запускать Mirror Maker 1, за ним Kafka Connect, сервисы приложений и т.п.
+
+### стратегические (на совсем потом) TODO
+
+- Транзакционность и идемпотентность продьюсера Schema Registry (не снимая концепцию ограничения кастомного пользователя конкретными ACL-ами)
+- Кластеризация Schema Registry (полезно)
+- Faust-streaming заменить на FastStream `https://faststream.ag2.ai/latest/` (`aiokafka` не поддерживает Кафку 4, и вроде даже не собирается, соотв. и Faust-streaming, а вот FastStream посволяет использовать под капотом confluent, и вообще "он лучше")
+- `exactly_once` в Faust-приложения (`processing_guarantee='exactly_once'`, но реализовать надо, не снимая концепцию ограничения кастомного пользователя конкретными ACL-ами под каждый сервис проекта)
+- `kafka-connect` на SSL (mTLS)
 
 ### <a name="general_assignment_review">Как проверять проект</a>
 
@@ -253,7 +262,7 @@ Faust-приложение для CLIENT API - это про другое, пр�
 
 Источниками данных будем рассматривать любые `.json`-файлы в директории, предполагая, что в каждом файле могут размещаться один и более json-объектов один за другим без обрамления в общий массив. Объекты pretty-форматированные, и друг от друга отделённые простыми переносами строк (Concatenated/Streaming JSON).
 
-После запуска проекта надо установить коннектор через конфиг в файле `./kafka-connect/shop_api.conf.json`.
+После запуска проекта надо установить коннектор через конфиг в файле `./etc-kafka-secrets/kafka-connect_shop_api.conf.json`.
 
 Так же надо раздать права пользователшю кафка-коннет, и выставить права на лиректории с файлами, приаттаченные фольюмом.
 
@@ -308,13 +317,13 @@ tesla@tesla:.../ya_kafka_project_final$ curl -s http://localhost:8073/connectors
 
 Пустой массив в ответ - всё работает.
 
-4. Отправим наш конфиг (`./kafka-connect/shop_api.conf.json`) для создания коннектора `shop-api-stage-reader`
+4. Отправим наш конфиг (`./etc-kafka-secrets/kafka-connect_shop_api.conf.json`) для создания коннектора `shop-api-stage-reader`
 
 ```bash
 # 8073, connectors, "name": "shop-api-stage-reader"
-curl -sX POST -H 'Content-Type: application/json' --data @./kafka-connect/shop_api.conf.json http://localhost:8073/connectors | jq
+curl -sX POST -H 'Content-Type: application/json' --data @./etc-kafka-secrets/kafka-connect_shop_api.conf.json http://localhost:8073/connectors | jq
 
-tesla@tesla:.../ya_kafka_project_final$ curl -sX POST -H 'Content-Type: application/json' --data @./kafka-connect/shop_api.conf.json http://localhost:8073/connectors | jq
+tesla@tesla:.../ya_kafka_project_final$ curl -sX POST -H 'Content-Type: application/json' --data @./etc-kafka-secrets/kafka-connect_shop_api.conf.json http://localhost:8073/connectors | jq
 {
   "name": "shop-api-stage-reader",
   "config": {
@@ -556,7 +565,7 @@ ls -lah kafka-connect/data
 curl -s http://localhost:8073/connectors | jq
 []
 
-curl -sX POST -H 'Content-Type: application/json' --data @./kafka-connect/shop_api.conf.json http://localhost:8073/connectors | jq
+curl -sX POST -H 'Content-Type: application/json' --data @./etc-kafka-secrets/kafka-connect_shop_api.conf.json http://localhost:8073/connectors | jq
 {
   "name": "shop-api-stage-reader",
   "config": {
@@ -619,7 +628,7 @@ sudo docker logs kafka-connect | grep "oo.json"
 **Всё прекрасно опять.**
 
 
-### <a name="dev_proc_iteration_2_2">Schema Registry, Faust-приложение</a>
+### <a name="dev_proc_iteration_2_2">Schema Registry</a>
 
 На данный момент `Kafka Connect` перемещает товары от магазинов из дректории с файлами в формате `Streaming JSON` в топик `goods-raw` на `stage`-кластере Kafka, а `Mirror Maker 1` реплицирует топик `goods-filtered` со `stage`-кластера в `mart`-кластер.
 
@@ -635,7 +644,7 @@ Python-приложение должно читать сообщения из т
 
 Сначала сформируем схему и фикстуры товаров для демо-проекта.
 
-Схему строим на основе прмиера товара из ТЗ. Обязательными полями делаем `product_id`, `name`, `price`, `stock`, `sku`, `store_id`, `created_at`, `updated_at`.
+Схему строим на основе примера товара из ТЗ. Обязательными полями делаем `product_id`, `name`, `price`, `stock`, `sku`, `store_id`, `created_at`, `updated_at`.
 
 Хранить её будем в файле `./etc-kafka-secrets/product.avsc`:
 
@@ -827,7 +836,7 @@ sudo docker logs schema-registry
 [2026-03-27 12:49:48,046] INFO 172.19.0.9 - - [27/Mar/2026:12:49:48 +0000] "POST /subjects/goods-prohibited-value/versions HTTP/2.0" 200 8 "-" "curl/7.61.1" 11 (io.confluent.rest-utils.requests)
 
 # kafka connect TODO: создать ещё контейнер, чтобы конфиг коннекту регил
-curl -sX POST -H 'Content-Type: application/json' --data @./kafka-connect/shop_api.conf.json http://localhost:8073/connectors | jq
+curl -sX POST -H 'Content-Type: application/json' --data @./etc-kafka-secrets/kafka-connect_shop_api.conf.json http://localhost:8073/connectors | jq
 ...
 
 curl -s http://localhost:8073/connectors/shop-api-stage-reader/status | jq
@@ -880,3 +889,298 @@ curl -s \
 ```
 
 Всё работает, можно делать Faust-приложение.
+
+### <a name="dev_proc_iteration_2_3">Faust-приложение</a>
+
+#### Что куда добавляем
+
+- переменные `SERVICE_SHOP_API_APP_NAME`, `SASL_UNAME_SHOP_API`, `SASL_PWD_SHOP_API` и т.д. в `.env.example`
+- в секцию KafkaServer в broker.sasl.jaas.conf (мы его сейчас формируем динамически в `compose.yaml`): `user_${SASL_UNAME_SHOP_API}="${SASL_PWD_SHOP_API}";`
+- в `kafka.cnf.template` вводим `${SERVICE_SHOP_API_APP_NAME}`
+- в структуру директорий проекта: `shop-api-app` с кодом для организации сервиса и приложения
+- в структуру сервисов проекта: сервис `shop-api-app`, volume `shop_api_app`, etc.
+- в `setup-acls-stage.sh` - ACL-ы пользователю `shop_api_user`:
+  - на топики `goods-raw`, `goods-filtered`, `goods-dlq`, `goods-prohibited`, `prohibition-list`
+  - на группу `shop_api_app` (LITERAL) (потому что так мы назвали приложение в `app = faust.App('shop_api_app', ...)`),
+  - на группы `shop_api_app` (PREFIXED) ,
+  - на топики `shop_api_app` (PREFIXED) (потому что Faust захочет их понасоздавать, когда мы включим `exactly_once`, а так же уже сейчас для `rocksdb`)
+  - на топики с префиксами `shop_api.`, `f-reply-`, группы с префиксом `shop-api-app-`: faust-streaming при работе прям активно использует топики в Кафке для организации процесса (тж. в декларацию приложение ввожим `reply_to` для задания имени топика для `ask()`-ов и т.п.).
+- Kafka UI: надо подружить со Schema Registry (оба кластера kafka-ui): для этого в `compose.yaml` для сервиса `kafka-ui` прописываем переменные окружения `KAFKA_CLUSTERS_0_SCHEMAREGISTRY_URL`, `KAFKA_CLUSTERS_1_SCHEMAREGISTRY_URL`, `KAFKA_CLUSTERS_0_SCHEMAREGISTRY_SSL_KEYSTORE_LOCATION` и так далее
+
+**NB**: при работе в "отладочной" конфигурации `volume`-а для сервиса `shop-api-app` (`./shop-api-app/app:/app # dev mode`), кроме `compose down -v` надо делать например `sudo rm -Rf shop-api-app/app/shop_api_app-data`, `sudo rm shop-api-app/app/supervisord.log`, `sudo rm -R shop-api-app/app/shop_api/__pycache__` и т.д. для исключения рассинхронизации кафки и роксдб (в репозиторий едет другая конфигурация, с `volume`-ом `shop-api-app_data:/app`).
+
+#### Добавление конфига в коннектор выносим в сервис
+
+Добавляем в проект сервис `connectors-registrator`.
+
+В зависимостях располагаем его между `kafka-connect` и `shop-api-app`.
+
+Его функция - исполнить
+
+```
+curl -sX POST -H 'Content-Type: application/json' \
+  --data @${CONTAINER_PATH_SECRETS}/kafka-connect_shop_api.conf.json \
+  http://${SERVICE_KAFKA_CONNECT_NAME}:${SERVICE_KAFKA_CONNECT_REST_PORT}/connectors
+```
+
+и завершить работу.
+
+#### Проверяем
+
+1. Разворачиваем проект
+
+```bash
+sudo docker compose --env-file .env.example up -d
+# sudo docker compose --env-file .env.example --ansi never up -d --build
+# sudo docker compose --env-file .env.example --ansi never up -d --build shop-api-app
+sudo docker ps -a
+sudo docker logs ...
+# etc.
+```
+
+2. Проверим конфиг Kafka connect
+
+проверим логи нашего нового сервиса `connectors-registrator`
+
+```bash
+sudo docker logs connectors-registrator
+Ждём готовности Kafka Connect на curl -s http://kafka-connect:8083/connectors ...
+Kafka Connect ещё не доступен, ждём 2 секунды...
+Kafka Connect ещё не доступен, ждём 2 секунды...
+Kafka Connect ещё не доступен, ждём 2 секунды...
+Kafka Connect ещё не доступен, ждём 2 секунды...
+Kafka Connect ещё не доступен, ждём 2 секунды...
+Kafka Connect ещё не доступен, ждём 2 секунды...
+{"name":"shop-api-stage-reader","config":{"connector.class":"com.github.jcustenborder.kafka.connect.spooldir.SpoolDirSchemaLessJsonSourceConnector","tasks.max":"1","input.path":"/data/shop_api_stage","error.path":"/data/shop_api_error","input.file.pattern":"^.*\\.json$","cleanup.policy":"DELETE","halt.on.error":"false","topic":"goods-raw","key.converter":"org.apache.kafka.connect.storage.StringConverter","value.converter":"org.apache.kafka.connect.json.JsonConverter","value.converter.schemas.enable":"false","name":"shop-api-stage-reader"},"tasks":[],"type":"source"}
+```
+
+Вроде всё хорошо.
+
+**TODO: в нашем славном mTLS-царстве затесался ренегат.** В будущем надо закрыть `kafka-connect` на SSL.
+
+Проверим конфиг коннектора:
+
+```bash
+curl -s http://localhost:8073/connectors/shop-api-stage-reader/status | jq
+{
+  "name": "shop-api-stage-reader",
+  "connector": {
+    "state": "RUNNING",
+    "worker_id": "kafka-connect:8083"
+  },
+  "tasks": [
+    {
+      "id": 0,
+      "state": "RUNNING",
+      "worker_id": "kafka-connect:8083"
+    }
+  ],
+  "type": "source"
+}
+```
+
+Вроде всё хорошо.
+
+3. Отправляем невалидные по схеме файлы в файловый стейдж дата-пайплайна SHOP API
+
+```bash
+cp ./shop_api_fixtures/boo.json ./kafka-connect/data/shop_api_stage
+cp ./shop_api_fixtures/moo.json ./kafka-connect/data/shop_api_stage
+
+ls ./kafka-connect/data/shop_api_stage
+ls ./kafka-connect/data/shop_api_error
+
+# http://192.168.100.225:8070/ui/clusters/stage/all-topics/goods-raw
+# видим 6 сообщений: работает kafka-connect, работает kafka-ui
+
+# Mirror Maker 1
+# пишем что угодно в топик goods-filtered на stage-кластере,
+# видим то же на mart-кластере (через UI)
+# (проверил)
+```
+
+4. Смотрим логи shop-api-app
+
+```bash
+sudo docker logs shop-api-app
+...
+2026-03-31 09:09:13,226 DEBG 'faust-worker' stderr output:
+[2026-03-31 09:09:13,225] [7] [INFO] Authenticated as shop_api_user via PLAIN 
+
+2026-03-31 09:09:22,211 DEBG 'faust-worker' stderr output:
+[2026-03-31 09:09:22,211] [7] [WARNING] SCHEMA MISMATCH: {'prop1': 'moo1', 'prop2': 'zoo1'}
+
+2026-03-31 09:09:22,212 DEBG 'faust-worker' stderr output:
+[2026-03-31 09:09:22,212] [7] [WARNING] SCHEMA MISMATCH: {'prop1': 'moo2', 'prop2': 'zoo2'}
+
+2026-03-31 09:09:22,213 DEBG 'faust-worker' stderr output:
+[2026-03-31 09:09:22,213] [7] [WARNING] SCHEMA MISMATCH: {'prop1': 'moo3', 'prop2': 'zoo3'}
+...
+```
+
+5. Смотрим в топик `goods-dlq`
+
+`http://192.168.100.225:8070/ui/clusters/stage/all-topics/goods-dlq/messages`
+
+Видим там все наши невалидные 6 сообщений
+
+`DONE 27 ms 420 Bytes 6 messages consumed`
+
+| Offset | Partition | Timestamp | KeyPreview | ValuePreview |
+|--------|-----------|-----------|------------|--------------|
+| 0 | 0 | 3/30/2026, 02:20:22 |  | {"reason":"schema_mismatch","payload":{"prop1":"boo1","prop2":"zoo1"}} |
+| 1 | 0 | 3/30/2026, 02:20:22 |  | {"reason":"schema_mismatch","payload":{"prop1":"boo2","prop2":"zoo2"}} |
+
+
+6. Отправляем валидные по схеме файлы в файловый стейдж дата-пайплайна SHOP API
+
+**NB: мы ещё НЕ заполняли список запрещённых товаров.**
+
+Проверяем, что все валидные по avro-схеме, зарегистрированной как `goods-filtered-value` (из файла `product.avsc`) (все 6 товаров, по 3 на файл) прольются в топик `goods-filtered`.
+
+6.1. Копируем фикстуры в директорию файлового стейджа пайплайна
+
+```bash
+cp ./shop_api_fixtures/store_001_1.json ./kafka-connect/data/shop_api_stage
+cp ./shop_api_fixtures/store_001_2.json ./kafka-connect/data/shop_api_stage
+
+ls ./kafka-connect/data/shop_api_stage
+ls ./kafka-connect/data/shop_api_error
+```
+
+6.2. Логи контейнера с Фауст-приложением
+
+```
+sudo docker logs -n 10 shop-api-app
+
+2026-03-31 09:10:39,748 DEBG 'faust-worker' stderr output:
+[2026-03-31 09:10:39,748] [7] [INFO] SENT TO FILTERED: 123 
+
+2026-03-31 09:10:39,749 DEBG 'faust-worker' stderr output:
+[2026-03-31 09:10:39,749] [7] [INFO] SENT TO FILTERED: 777 
+
+2026-03-31 09:10:39,750 DEBG 'faust-worker' stderr output:
+[2026-03-31 09:10:39,749] [7] [INFO] SENT TO FILTERED: 44 
+
+```
+
+6.3. Смотрим в Kafka UI сначала на stage-кластер:
+
+`http://192.168.100.225:8070/ui/clusters/stage/all-topics/goods-filtered/messages`
+
+`DONE 2 ms 2 KB 6 messages consumed`
+
+| Offset | Partition | Timestamp | KeyPreview | ValuePreview |
+|--------|-----------|-----------|------------|--------------|
+| 0 | 2 | 3/30/2026, 15:14:38 |  | [][][][][] 12345.Умные часы XYZ ףp���... |
+| 0 | 1 | 3/30/2026, 15:14:38 |  | [][][][][] 5552Глупые часы ABC... |
+
+6.4. Смотрим в логи Mirror Maker 1
+
+```bash
+sudo docker logs mirror-maker
+...
+# пустота, кроме варнинга, что сам инструмент депрекейтед
+```
+
+6.5. Смотрим в Kafka UI сначала на mart-кластер:
+
+`http://192.168.100.225:8070/ui/clusters/mart/all-topics/goods-filtered/messages`
+
+`DONE 5 ms 2 KB 6 messages consumed`
+
+И вижу все те же сообщения: Ура, Mirror Maker тоже не сломался
+
+
+7. Добавим в список запрещающих слов строку `"глуп"`
+
+(мы мгазин умной электроники, и глупыми девайсами не торгуем)
+
+7.1. Идём в контейнер с приложением:
+
+```bash
+sudo docker exec -it shop-api-app bash
+root@shop-api-app:/app# 
+```
+
+7.2. Смотрим список команд, из которого наших - две:
+
+```bash
+root@shop-api-app:/app# faust -A shop_api.app --help
+...
+Commands:
+...
+  block-word
+...
+  list-block-words
+...
+```
+
+```bash
+root@shop-api-app:/app# faust -A shop_api.app block-word --help
+Usage: faust block-word [OPTIONS]
+
+  Send well-formed word block message to the corresponding agent
+
+Options:
+  --word TEXT      Word to block|unblock.
+  --block BOOLEAN  Block (True) or unblock (False) word.  [default: True]
+  --help           Show this message and exit.
+```
+
+```bash
+root@shop-api-app:/app# faust -A shop_api.app list-block-words --help
+Usage: faust list-block-words [OPTIONS]
+
+  Shows the state of the blocked words table
+
+Options:
+  --help  Show this message and exit.
+
+```
+
+7.3. Пополняем список стоп-слов
+
+```bash
+sudo docker exec -it shop-api-app bash
+
+root@shop-api-app:/app# faust -A shop_api.app block-word --word глуп --block True
+sending BlockWordMessage
+sent: word='глуп' block=True
+
+root@shop-api-app:/app# faust -A shop_api.app block-word --word калья --block True
+sending BlockWordMessage
+sent: word='калья' block=True
+```
+
+И проверим список:
+
+```bash
+root@shop-api-app:/app# faust -A shop_api.app list-block-words
+{'калья': True}
+{'глуп': True}
+```
+
+Запрещённые слова записываются в топик, можно так же проверить в Kafka UI:
+
+`http://192.168.100.225:8070/ui/clusters/stage/all-topics/prohibition-list/messages`
+
+`DONE 1 ms 290 Bytes 2 messages consumed`
+
+И можно проверить по http в Фаусте:
+
+`http://192.168.100.225:6077/`
+
+`{"status":"OK"}`
+
+`http://192.168.100.225:6077/get-block-words/`
+
+```json
+[{"\u043a\u0430\u043b\u044c\u044f":true},{"\u0433\u043b\u0443\u043f":true}]
+```
+
+8. Опять зальём оба файла
+
+Проверяем, что глупые товары поедут в топик `goods-prohibited`, остальные опять в `goods-filtered`.
+
+TODO

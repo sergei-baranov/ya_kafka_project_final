@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     librdkafka-dev \
     libssl-dev \
+    librocksdb-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY ./supervisord.conf /etc/supervisord.conf

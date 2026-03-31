@@ -1,4 +1,4 @@
-echo "--- 1. Регистрируем avro-схему из product.avsc для топиков ${TOPIC_GOODS_FILTERED}, ${TOPIC_GOODS_PROHOBITED} ---"
+echo "--- 1. Регистрируем avro-схему из product.avsc для топиков ${TOPIC_GOODS_FILTERED}, ${TOPIC_GOODS_PROHIBITED} ---"
 
 do_schema_registry_rest_curl() {
   local method=$1
@@ -12,7 +12,7 @@ do_schema_registry_rest_curl() {
     --cert-type P12 --cert "${CONTAINER_PATH_KEYSTORE}:${KAFKA_KEYSTORE_CREDS}"
 }
 
-SUBJECTS=("${TOPIC_GOODS_FILTERED}-value" "${TOPIC_GOODS_PROHOBITED}-value")
+SUBJECTS=("${TOPIC_GOODS_FILTERED}-value" "${TOPIC_GOODS_PROHIBITED}-value")
 COMPATIBILITY_LEVEL="FULL"
 # CLEAN_SCHEMA=$(cat "${CONTAINER_PATH_SECRETS}/${PRODUCT_AVRO_SCHEMA_FILE_NAME}" | jq -Rs .)
 CLEAN_SCHEMA=$(cat "${CONTAINER_PATH_SECRETS}/${PRODUCT_AVRO_SCHEMA_FILE_NAME}" | python3 -c "import sys, json; print(json.dumps(sys.stdin.read()))")

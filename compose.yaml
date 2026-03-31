@@ -52,13 +52,13 @@ x-kafka_controller:
   KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: false
   KAFKA_REPLICATION_QUOTA_WINDOW_NUM: 11
   KAFKA_REPLICATION_QUOTA_WINDOW_SIZE_SECONDS: 1
-  KAFKA_OPTS: "-Djava.security.auth.login.config=/etc/kafka/secrets/controller.sasl.jaas.conf"
+  KAFKA_OPTS: "-Djava.security.auth.login.config=${CONTAINER_PATH_SECRETS}/controller.sasl.jaas.conf"
   # для отладки SSL
   # KAFKA_OPTS: "-Djavax.net.debug=ssl,handshake"
   # KAFKA_LISTENER_NAME_CONTROLLER_SASL_JAAS_CONFIG_NAME: "ControllerServer"
 
   # SSL Config
-  KAFKA_SSL_SECRETS_DIR: /etc/kafka/secrets
+  KAFKA_SSL_SECRETS_DIR: ${CONTAINER_PATH_SECRETS}
   KAFKA_SSL_TRUSTSTORE_LOCATION: ${CONTAINER_PATH_TRUSTSTORE}
   KAFKA_SSL_KEYSTORE_TYPE: ${KEYSTORE_TYPE}
   KAFKA_SSL_KEYSTORE_LOCATION: ${CONTAINER_PATH_KEYSTORE}
@@ -86,7 +86,7 @@ x-controller-entry-write-secrets:
       - /bin/sh
       - -c
       - |
-        cat <<EOF > /etc/kafka/secrets/controller.sasl.jaas.conf
+        cat <<EOF > ${CONTAINER_PATH_SECRETS}/controller.sasl.jaas.conf
         controller.KafkaServer {
             org.apache.kafka.common.security.plain.PlainLoginModule required
             username="${SASL_UNAME_KAFKA_CONTROLLER}"
@@ -97,7 +97,7 @@ x-controller-entry-write-secrets:
         };
         EOF
 
-        cat <<EOF > /etc/kafka/secrets/admin-client.properties
+        cat <<EOF > ${CONTAINER_PATH_SECRETS}/admin-client.properties
         security.protocol=SASL_SSL
         sasl.mechanism=PLAIN
         sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
@@ -118,10 +118,10 @@ x-controller-entry-write-secrets:
         # (возможно потому, что мы в vulume на одну и ту же диру
         # хостовой машины, но на два образа с двумя разными юзерами,
         # от которых приложение в контейнере зпускается)
-        #chown 1000:1000 /etc/kafka/secrets/controller.sasl.jaas.conf
-        #chmod 600 /etc/kafka/secrets/controller.sasl.jaas.conf
-        chmod 664 /etc/kafka/secrets/controller.sasl.jaas.conf
-        chmod 664 /etc/kafka/secrets/admin-client.properties
+        #chown 1000:1000 ${CONTAINER_PATH_SECRETS}/controller.sasl.jaas.conf
+        #chmod 600 ${CONTAINER_PATH_SECRETS}/controller.sasl.jaas.conf
+        chmod 664 ${CONTAINER_PATH_SECRETS}/controller.sasl.jaas.conf
+        chmod 664 ${CONTAINER_PATH_SECRETS}/admin-client.properties
 
         echo "JAAS and admin-client.properties for Controller generated from .env"
         exec su -s /bin/sh -c '/etc/confluent/docker/run' appuser
@@ -150,13 +150,13 @@ x-kafka_broker:
   KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: false
   KAFKA_REPLICATION_QUOTA_WINDOW_NUM: 11
   KAFKA_REPLICATION_QUOTA_WINDOW_SIZE_SECONDS: 1
-  KAFKA_OPTS: "-Djava.security.auth.login.config=/etc/kafka/secrets/broker.sasl.jaas.conf"
+  KAFKA_OPTS: "-Djava.security.auth.login.config=${CONTAINER_PATH_SECRETS}/broker.sasl.jaas.conf"
   # для отладки SSL
   # KAFKA_OPTS: "-Djavax.net.debug=ssl,handshake"
   # KAFKA_LISTENER_NAME_INTERNAL_SASL_JAAS_CONFIG_NAME: "KafkaServer"
 
   # SSL Config
-  KAFKA_SSL_SECRETS_DIR: /etc/kafka/secrets
+  KAFKA_SSL_SECRETS_DIR: ${CONTAINER_PATH_SECRETS}
   KAFKA_SSL_TRUSTSTORE_LOCATION: ${CONTAINER_PATH_TRUSTSTORE}
   KAFKA_SSL_KEYSTORE_TYPE: ${KEYSTORE_TYPE}
   KAFKA_SSL_KEYSTORE_LOCATION: ${CONTAINER_PATH_KEYSTORE}
@@ -184,7 +184,7 @@ x-broker-entry-write-secrets:
       - /bin/sh
       - -c
       - |
-        cat <<EOF > /etc/kafka/secrets/broker.sasl.jaas.conf
+        cat <<EOF > ${CONTAINER_PATH_SECRETS}/broker.sasl.jaas.conf
         KafkaServer {
             org.apache.kafka.common.security.plain.PlainLoginModule required
             username="${SASL_UNAME_KAFKA_BROKER}"
@@ -192,15 +192,17 @@ x-broker-entry-write-secrets:
             user_${SASL_UNAME_ADMIN}="${SASL_PWD_ADMIN}"
             user_${SASL_UNAME_KAFKA_CONTROLLER}="${SASL_PWD_KAFKA_CONTROLLER}"
             user_${SASL_UNAME_KAFKA_BROKER}="${SASL_PWD_KAFKA_BROKER}"
+            user_${SASL_UNAME_CONSUMER}="${SASL_PWD_CONSUMER}"
+            user_${SASL_UNAME_PRODUCER}="${SASL_PWD_PRODUCER}"
+            user_${SASL_UNAME_SCHEMA_REGISTRY}="${SASL_PWD_SCHEMA_REGISTRY}"
             user_${SASL_UNAME_KAFKA_UI}="${SASL_PWD_KAFKA_UI}"
             user_${SASL_UNAME_KAFKA_CONNECT}="${SASL_PWD_KAFKA_CONNECT}"
-            user_${SASL_UNAME_KAFKA_CONNECT}="${SASL_PWD_KAFKA_CONNECT}"
-            user_${SASL_UNAME_PRODUCER}="${SASL_PWD_PRODUCER}"
-            user_${SASL_UNAME_SCHEMA_REGISTRY}="${SASL_PWD_SCHEMA_REGISTRY}";
+            user_${SASL_UNAME_SHOP_API}="${SASL_PWD_SHOP_API}"
+            ;
         };
         EOF
 
-        cat <<EOF > /etc/kafka/secrets/admin-client.properties
+        cat <<EOF > ${CONTAINER_PATH_SECRETS}/admin-client.properties
         security.protocol=SASL_SSL
         sasl.mechanism=PLAIN
         sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
@@ -224,10 +226,10 @@ x-broker-entry-write-secrets:
         # (возможно потому, что мы в vulume на одну и ту же диру
         # хостовой машины, но на два образа с двумя разными юзерами,
         # от которых приложение в контейнере зпускается)
-        #chown 1000:1000 /etc/kafka/secrets/broker.sasl.jaas.conf
-        #chmod 600 /etc/kafka/secrets/broker.sasl.jaas.conf
-        chmod 664 /etc/kafka/secrets/broker.sasl.jaas.conf
-        chmod 664 /etc/kafka/secrets/admin-client.properties
+        #chown 1000:1000 ${CONTAINER_PATH_SECRETS}/broker.sasl.jaas.conf
+        #chmod 600 ${CONTAINER_PATH_SECRETS}/broker.sasl.jaas.conf
+        chmod 664 ${CONTAINER_PATH_SECRETS}/broker.sasl.jaas.conf
+        chmod 664 ${CONTAINER_PATH_SECRETS}/admin-client.properties
 
         echo "JAAS and admin-client.properties for Broker generated from .env"
         exec su -s /bin/sh -c '/etc/confluent/docker/run' appuser
@@ -262,7 +264,7 @@ services:
       KAFKA_LISTENERS: CONTROLLER://:${SC_1_PORT_90}
 
     volumes:
-      - ./etc-kafka-secrets:/etc/kafka/secrets
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
       - ${SC_1_NAME}_data:/var/lib/kafka/data
     networks:
       - ${STAGE_CLUSTER_NETWORK}
@@ -288,7 +290,7 @@ services:
       KAFKA_LISTENERS: CONTROLLER://:${SC_2_PORT_90}
 
     volumes:
-      - ./etc-kafka-secrets:/etc/kafka/secrets
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
       - ${SC_2_NAME}_data:/var/lib/kafka/data
     networks:
       - ${STAGE_CLUSTER_NETWORK}
@@ -314,7 +316,7 @@ services:
       KAFKA_LISTENERS: CONTROLLER://:${SC_3_PORT_90}
 
     volumes:
-      - ./etc-kafka-secrets:/etc/kafka/secrets
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
       - ${SC_3_NAME}_data:/var/lib/kafka/data
     networks:
       - ${STAGE_CLUSTER_NETWORK}
@@ -343,7 +345,7 @@ services:
       KAFKA_ADVERTISED_LISTENERS: BROKER://localhost:${SB_1_PORT_90},INTERNAL://${SB_1_NAME}:${SB_1_PORT_92}
 
     volumes:
-      - ./etc-kafka-secrets:/etc/kafka/secrets
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
       - ${SB_1_NAME}_data:/var/lib/kafka/data
     networks:
       - ${STAGE_CLUSTER_NETWORK}
@@ -370,7 +372,7 @@ services:
       KAFKA_ADVERTISED_LISTENERS: BROKER://localhost:${SB_2_PORT_90},INTERNAL://${SB_2_NAME}:${SB_2_PORT_92}
 
     volumes:
-      - ./etc-kafka-secrets:/etc/kafka/secrets
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
       - ${SB_2_NAME}_data:/var/lib/kafka/data
     networks:
       - ${STAGE_CLUSTER_NETWORK}
@@ -397,7 +399,7 @@ services:
       KAFKA_ADVERTISED_LISTENERS: BROKER://localhost:${SB_3_PORT_90},INTERNAL://${SB_3_NAME}:${SB_3_PORT_92}
 
     volumes:
-      - ./etc-kafka-secrets:/etc/kafka/secrets
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
       - ${SB_3_NAME}_data:/var/lib/kafka/data
     networks:
       - ${STAGE_CLUSTER_NETWORK}
@@ -427,7 +429,7 @@ services:
       KAFKA_LISTENERS: CONTROLLER://:${MC_1_PORT_90}
 
     volumes:
-      - ./etc-kafka-secrets:/etc/kafka/secrets
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
       - ${MC_1_NAME}_data:/var/lib/kafka/data
     networks:
       - ${MART_CLUSTER_NETWORK}
@@ -453,7 +455,7 @@ services:
       KAFKA_LISTENERS: CONTROLLER://:${MC_2_PORT_90}
 
     volumes:
-      - ./etc-kafka-secrets:/etc/kafka/secrets
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
       - ${MC_2_NAME}_data:/var/lib/kafka/data
     networks:
       - ${MART_CLUSTER_NETWORK}
@@ -479,7 +481,7 @@ services:
       KAFKA_LISTENERS: CONTROLLER://:${MC_3_PORT_90}
 
     volumes:
-      - ./etc-kafka-secrets:/etc/kafka/secrets
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
       - ${MC_3_NAME}_data:/var/lib/kafka/data
     networks:
       - ${MART_CLUSTER_NETWORK}
@@ -508,7 +510,7 @@ services:
       KAFKA_ADVERTISED_LISTENERS: BROKER://localhost:${MB_1_PORT_90},INTERNAL://${MB_1_NAME}:${MB_1_PORT_92}
 
     volumes:
-      - ./etc-kafka-secrets:/etc/kafka/secrets
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
       - ${MB_1_NAME}_data:/var/lib/kafka/data
     networks:
       - ${MART_CLUSTER_NETWORK}
@@ -535,7 +537,7 @@ services:
       KAFKA_ADVERTISED_LISTENERS: BROKER://localhost:${MB_2_PORT_90},INTERNAL://${MB_2_NAME}:${MB_2_PORT_92}
 
     volumes:
-      - ./etc-kafka-secrets:/etc/kafka/secrets
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
       - ${MB_2_NAME}_data:/var/lib/kafka/data
     networks:
       - ${MART_CLUSTER_NETWORK}
@@ -562,7 +564,7 @@ services:
       KAFKA_ADVERTISED_LISTENERS: BROKER://localhost:${MB_3_PORT_90},INTERNAL://${MB_3_NAME}:${MB_3_PORT_92}
 
     volumes:
-      - ./etc-kafka-secrets:/etc/kafka/secrets
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
       - ${MB_3_NAME}_data:/var/lib/kafka/data
     networks:
       - ${MART_CLUSTER_NETWORK}
@@ -592,14 +594,14 @@ services:
       - ${MB_3_NAME}
     command: >
       bash -c "
-          sleep 20 &&
-          chmod +x /etc/kafka/secrets/setup-acls-stage.sh &&
-          /etc/kafka/secrets/setup-acls-stage.sh &&
-          chmod +x /etc/kafka/secrets/setup-acls-mart.sh &&
-          /etc/kafka/secrets/setup-acls-mart.sh &&
-          sleep 20"
+          sleep 5 &&
+          chmod +x ${CONTAINER_PATH_SECRETS}/setup-acls-stage.sh &&
+          ${CONTAINER_PATH_SECRETS}/setup-acls-stage.sh &&
+          chmod +x ${CONTAINER_PATH_SECRETS}/setup-acls-mart.sh &&
+          ${CONTAINER_PATH_SECRETS}/setup-acls-mart.sh &&
+          sleep 5"
     volumes:
-      - ./etc-kafka-secrets:/etc/kafka/secrets
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
       - ${SERVICE_TOPIC_CREATOR_NAME}_data:/var/lib/kafka/data
     networks:
       - ${STAGE_CLUSTER_NETWORK}
@@ -696,7 +698,7 @@ services:
       SCHEMA_REGISTRY_HEAP_OPTS: "${SERVICE_SCHEMA_REGISTRY_HEAP_OPTS}"
     # command: /bin/sh -c "schema-registry-start /etc/schema-registry/schema-registry.properties"
     volumes:
-      - ./etc-kafka-secrets:/etc/kafka/secrets
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
       # - ./schema-registry.properties:/etc/schema-registry/schema-registry.properties
       # - ...:/var/log/schema-registry
     networks:
@@ -711,39 +713,6 @@ services:
           memory: ${SERVICE_SCHEMA_REGISTRY_RESERVE_MEMORY}
     # entrypoint: ["tail", "-f", "/dev/null"]
 
-  # schemas-registrator
-  schemas-registrator:
-    image: ${IMAGE}
-    container_name: ${SERVICE_SCHEMAS_REGISTRATOR_NAME}
-    hostname: ${SERVICE_SCHEMAS_REGISTRATOR_NAME}
-    env_file:
-      - ${ENV_PATH:-.env}
-    depends_on:
-      - ${SERVICE_SCHEMA_REGISTRY_NAME}
-    command: >
-      bash -c "
-          sleep 20 &&
-          echo 'Ждём готовности Schema Registry на ${SCHEMA_REGISTRY_REST_URL_INNER}...' &&
-          until curl -k -s -f --cert-type P12 --cert '${CONTAINER_PATH_KEYSTORE}:${KAFKA_KEYSTORE_CREDS}' '${SCHEMA_REGISTRY_REST_URL_INNER}/subjects'  > /dev/null; do
-            echo 'Schema Registry ещё не доступен, ждём 2 секунды...' &&
-            sleep 2;
-          done &&
-          chmod +x /etc/kafka/secrets/setup-schemas.sh &&
-          /etc/kafka/secrets/setup-schemas.sh"
-    volumes:
-      - ./etc-kafka-secrets:/etc/kafka/secrets
-      - ${SERVICE_SCHEMAS_REGISTRATOR_NAME}_data:/var/lib/kafka/data
-    networks:
-      - ${STAGE_CLUSTER_NETWORK}
-    deploy:
-      resources:
-        limits:
-          # cpus: '${SERVICE_SCHEMAS_REGISTRATOR_LIMIT_CPUS}'
-          memory: ${SERVICE_SCHEMAS_REGISTRATOR_LIMIT_MEMORY}
-        reservations:
-          cpus: '${SERVICE_SCHEMAS_REGISTRATOR_RESERVE_CPUS}'
-          memory: ${SERVICE_SCHEMAS_REGISTRATOR_RESERVE_MEMORY}
-
   # mirror-maker
   mirror-maker:
     image: ${IMAGE}
@@ -752,7 +721,7 @@ services:
     env_file:
       - ${ENV_PATH:-.env}
     depends_on:
-      schemas-registrator:
+      topic-creation:
         condition: service_completed_successfully
     command: >
       bash -c "
@@ -783,7 +752,7 @@ services:
 
           kafka-mirror-maker --consumer.config /tmp/consumer.properties --producer.config /tmp/producer.properties --whitelist ${TOPIC_GOODS_FILTERED} --num.streams 1"
     volumes:
-      - ./etc-kafka-secrets:/etc/kafka/secrets
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
       - ${SERVICE_MIRROR_MAKER_NAME}_data:/var/lib/kafka/data
       # я так понимаю - чисто почитать, что мы там написали в command (?)
       # - ./mirror-maker-consumer.cfg:/tmp/consumer.properties
@@ -800,6 +769,39 @@ services:
           cpus: '${SERVICE_MIRROR_MAKER_RESERVE_CPUS}'
           memory: ${SERVICE_MIRROR_MAKER_RESERVE_MEMORY}
 
+  # schemas-registrator
+  schemas-registrator:
+    image: ${IMAGE}
+    container_name: ${SERVICE_SCHEMAS_REGISTRATOR_NAME}
+    hostname: ${SERVICE_SCHEMAS_REGISTRATOR_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
+    depends_on:
+      - ${SERVICE_SCHEMA_REGISTRY_NAME}
+    command: >
+      bash -c "
+          sleep 5 &&
+          echo 'Ждём готовности Schema Registry на ${SCHEMA_REGISTRY_REST_URL_INNER} ...' &&
+          until curl -k -s -f --cert-type P12 --cert '${CONTAINER_PATH_KEYSTORE}:${KAFKA_KEYSTORE_CREDS}' '${SCHEMA_REGISTRY_REST_URL_INNER}/subjects'  > /dev/null; do
+            echo 'Schema Registry ещё не доступен, ждём 2 секунды...' &&
+            sleep 2;
+          done &&
+          chmod +x ${CONTAINER_PATH_SECRETS}/setup-schemas.sh &&
+          ${CONTAINER_PATH_SECRETS}/setup-schemas.sh"
+    volumes:
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
+      - ${SERVICE_SCHEMAS_REGISTRATOR_NAME}_data:/var/lib/kafka/data
+    networks:
+      - ${STAGE_CLUSTER_NETWORK}
+    deploy:
+      resources:
+        limits:
+          # cpus: '${SERVICE_SCHEMAS_REGISTRATOR_LIMIT_CPUS}'
+          memory: ${SERVICE_SCHEMAS_REGISTRATOR_LIMIT_MEMORY}
+        reservations:
+          cpus: '${SERVICE_SCHEMAS_REGISTRATOR_RESERVE_CPUS}'
+          memory: ${SERVICE_SCHEMAS_REGISTRATOR_RESERVE_MEMORY}
+
   # kafka-ui
   kafka-ui:
     image: ${IMAGE_PROVECTUSLABS_KAFKA_UI}
@@ -814,13 +816,13 @@ services:
       - "${SERVICE_KAFKA_UI_PORT_80}:8080"
     environment:
       ## Вместо KAFKA_OPTS используем JAVA_OPTS
-      JAVA_OPTS:  "-Djava.security.auth.login.config=/etc/kafka/secrets/kafkaui.sasl.jaas.conf"
+      JAVA_OPTS:  "-Djava.security.auth.login.config=${CONTAINER_PATH_SECRETS}/kafkaui.sasl.jaas.conf"
       KAFKA_CLUSTERS_0_NAME: stage
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: ${SB_1_NAME}:${SB_1_PORT_92},${SB_2_NAME}:${SB_2_PORT_92},${SB_3_NAME}:${SB_3_PORT_92}
       KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: SASL_SSL
       # KAFKA_CLUSTERS_0_PROPERTIES_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: ""
       KAFKA_CLUSTERS_0_PROPERTIES_SASL_MECHANISM: PLAIN
-      KAFKA_CLUSTERS_0_PROPERTIES_SSL_SECRETS_DIR: /etc/kafka/secrets
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_SECRETS_DIR: ${CONTAINER_PATH_SECRETS}
       KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_LOCATION: ${CONTAINER_PATH_TRUSTSTORE}
       KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_TYPE: ${KEYSTORE_TYPE}
       KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_LOCATION: ${CONTAINER_PATH_KEYSTORE}
@@ -828,12 +830,19 @@ services:
       KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_PASSWORD: ${KAFKA_TRUSTSTORE_CREDS}
       KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_PASSWORD: ${KAFKA_KEYSTORE_CREDS}
       KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEY_PASSWORD: ${KAFKA_SSLKEY_CREDS}
+      
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY_URL: ${SCHEMA_REGISTRY_REST_URL_INNER}
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY_SSL_KEYSTORE_LOCATION: ${CONTAINER_PATH_KEYSTORE}
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY_SSL_KEYSTORE_PASSWORD: ${KAFKA_SSLKEY_CREDS}
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY_SSL_TRUSTSTORE_LOCATION: ${CONTAINER_PATH_TRUSTSTORE}
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY_SSL_TRUSTSTORE_PASSWORD: ${KAFKA_TRUSTSTORE_CREDS}
+
       KAFKA_CLUSTERS_1_NAME: mart
       KAFKA_CLUSTERS_1_BOOTSTRAPSERVERS: ${MB_1_NAME}:${MB_1_PORT_92},${MB_2_NAME}:${MB_2_PORT_92},${MB_3_NAME}:${MB_3_PORT_92}
       KAFKA_CLUSTERS_1_PROPERTIES_SECURITY_PROTOCOL: SASL_SSL
       # KAFKA_CLUSTERS_1_PROPERTIES_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: ""
       KAFKA_CLUSTERS_1_PROPERTIES_SASL_MECHANISM: PLAIN
-      KAFKA_CLUSTERS_1_PROPERTIES_SSL_SECRETS_DIR: /etc/kafka/secrets
+      KAFKA_CLUSTERS_1_PROPERTIES_SSL_SECRETS_DIR: ${CONTAINER_PATH_SECRETS}
       KAFKA_CLUSTERS_1_PROPERTIES_SSL_TRUSTSTORE_LOCATION: ${CONTAINER_PATH_TRUSTSTORE}
       KAFKA_CLUSTERS_1_PROPERTIES_SSL_KEYSTORE_TYPE: ${KEYSTORE_TYPE}
       KAFKA_CLUSTERS_1_PROPERTIES_SSL_KEYSTORE_LOCATION: ${CONTAINER_PATH_KEYSTORE}
@@ -841,8 +850,14 @@ services:
       KAFKA_CLUSTERS_1_PROPERTIES_SSL_TRUSTSTORE_PASSWORD: ${KAFKA_TRUSTSTORE_CREDS}
       KAFKA_CLUSTERS_1_PROPERTIES_SSL_KEYSTORE_PASSWORD: ${KAFKA_KEYSTORE_CREDS}
       KAFKA_CLUSTERS_1_PROPERTIES_SSL_KEY_PASSWORD: ${KAFKA_SSLKEY_CREDS}
+      
+      KAFKA_CLUSTERS_1_SCHEMAREGISTRY_URL: ${SCHEMA_REGISTRY_REST_URL_INNER}
+      KAFKA_CLUSTERS_1_SCHEMAREGISTRY_SSL_KEYSTORE_LOCATION: ${CONTAINER_PATH_KEYSTORE}
+      KAFKA_CLUSTERS_1_SCHEMAREGISTRY_SSL_KEYSTORE_PASSWORD: ${KAFKA_SSLKEY_CREDS}
+      KAFKA_CLUSTERS_1_SCHEMAREGISTRY_SSL_TRUSTSTORE_LOCATION: ${CONTAINER_PATH_TRUSTSTORE}
+      KAFKA_CLUSTERS_1_SCHEMAREGISTRY_SSL_TRUSTSTORE_PASSWORD: ${KAFKA_TRUSTSTORE_CREDS}
     volumes:
-      - ./etc-kafka-secrets:/etc/kafka/secrets
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
     networks:
       - ${STAGE_CLUSTER_NETWORK}
       - ${MART_CLUSTER_NETWORK}
@@ -853,8 +868,8 @@ services:
       - /bin/sh
       - -c
       - |
-        mkdir -p /etc/kafka/secrets
-        cat <<EOF > /etc/kafka/secrets/kafkaui.sasl.jaas.conf
+        mkdir -p ${CONTAINER_PATH_SECRETS}
+        cat <<EOF > ${CONTAINER_PATH_SECRETS}/kafkaui.sasl.jaas.conf
         KafkaClient {
             org.apache.kafka.common.security.plain.PlainLoginModule required
             username="${SASL_UNAME_KAFKA_UI}"
@@ -868,9 +883,9 @@ services:
         # (возможно потому, что мы в vulume на одну и ту же диру
         # хостовой машины, но на два образа с двумя разными юзерами,
         # от которых приложение в контейнере зпускается)
-        # chown -R 1001:1001 /etc/kafka/secrets
-        # chmod 600 /etc/kafka/secrets/kafkaui.sasl.jaas.conf
-        chmod 664 /etc/kafka/secrets/kafkaui.sasl.jaas.conf
+        # chown -R 1001:1001 ${CONTAINER_PATH_SECRETS}
+        # chmod 600 ${CONTAINER_PATH_SECRETS}/kafkaui.sasl.jaas.conf
+        chmod 664 ${CONTAINER_PATH_SECRETS}/kafkaui.sasl.jaas.conf
         
         echo "JAAS for Kafka UI generated from .env"
         # Запуск через su для понижения привилегий до kafkaui
@@ -914,7 +929,7 @@ services:
           cpus: '${SERVICE_KAFKA_CONNECT_RESERVE_CPUS}'
           memory: ${SERVICE_KAFKA_CONNECT_RESERVE_MEMORY}
     volumes:
-      - ./etc-kafka-secrets:/etc/kafka/secrets
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
       - ./kafka-connect/data/shop_api_stage:/data/shop_api_stage
       - ./kafka-connect/data/shop_api_error:/data/shop_api_error
     networks:
@@ -975,24 +990,59 @@ services:
       # KAFKA_JMX_PORT: '9875'
       # KAFKA_OPTS: "-javaagent:/opt/jmx_prometheus_javaagent-0.15.0.jar=9876:/opt/kafka-connect.yml"
 
-#  shop-api-app:
-#    build:
-#      context: ./shop-api-app
-#    container_name: ${SERVICE_SHOP_API_APP_NAME}
-#    hostname: ${SERVICE_SHOP_API_APP_NAME}
-#    env_file:
-#      - ${ENV_PATH:-.env}
-#    depends_on:
-#      - ${SERVICE_KAFKA_CONNECT_NAME}
-#    ports:
-#      - "6066-6077:6066-6077"
-#    volumes:
-#      - shop_api_app:/app
-#      - ./etc-kafka-secrets:/etc/kafka/secrets
-#    stdin_open: true
-#    tty: true
-#    networks:
-#      - ${STAGE_CLUSTER_NETWORK}
+  # connectors-registrator
+  connectors-registrator:
+    image: ${IMAGE}
+    container_name: ${SERVICE_CONNECTORS_REGISTRATOR_NAME}
+    hostname: ${SERVICE_CONNECTORS_REGISTRATOR_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
+    depends_on:
+      - ${SERVICE_KAFKA_CONNECT_NAME}
+    command: >
+      bash -c "
+          sleep 5 &&
+          echo 'Ждём готовности Kafka Connect на curl -s http://${SERVICE_KAFKA_CONNECT_NAME}:${SERVICE_KAFKA_CONNECT_REST_PORT}/connectors ...' &&
+          until curl -k -s -f 'http://${SERVICE_KAFKA_CONNECT_NAME}:${SERVICE_KAFKA_CONNECT_REST_PORT}/connectors'  > /dev/null; do
+            echo 'Kafka Connect ещё не доступен, ждём 2 секунды...' &&
+            sleep 2;
+          done &&
+          curl -sX POST -H 'Content-Type: application/json' --data @${CONTAINER_PATH_SECRETS}/kafka-connect_shop_api.conf.json http://${SERVICE_KAFKA_CONNECT_NAME}:${SERVICE_KAFKA_CONNECT_REST_PORT}/connectors"
+    volumes:
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
+      - ${SERVICE_CONNECTORS_REGISTRATOR_NAME}_data:/var/lib/kafka/data
+    networks:
+      - ${STAGE_CLUSTER_NETWORK}
+    deploy:
+      resources:
+        limits:
+          # cpus: '${SERVICE_SCHEMAS_REGISTRATOR_LIMIT_CPUS}'
+          memory: ${SERVICE_CONNECTORS_REGISTRATOR_LIMIT_MEMORY}
+        reservations:
+          cpus: '${SERVICE_CONNECTORS_REGISTRATOR_RESERVE_CPUS}'
+          memory: ${SERVICE_CONNECTORS_REGISTRATOR_RESERVE_MEMORY}
+
+  # shop-api-app
+  shop-api-app:
+    build:
+      context: ./shop-api-app
+    container_name: ${SERVICE_SHOP_API_APP_NAME}
+    hostname: ${SERVICE_SHOP_API_APP_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
+    depends_on:
+      connectors-registrator:
+        condition: service_completed_successfully
+    ports:
+      - "6066-6077:6066-6077"
+    volumes:
+      # - ./shop-api-app/app:/app # dev mode
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
+      - ${SERVICE_SHOP_API_APP_NAME}_data:/app
+    stdin_open: true
+    tty: true
+    networks:
+      - ${STAGE_CLUSTER_NETWORK}
 
 networks:
   ya-kafka-pf-stage:
@@ -1015,5 +1065,6 @@ volumes:
   mart-broker-3_data:
   topic-creation_data:
   schemas-registrator_data:
+  connectors-registrator_data:
   mirror-maker_data:
-  shop_api_app:
+  shop-api-app_data:
