@@ -1,0 +1,16 @@
+{
+  "name": "shop-api-stage-reader",
+  "config": {
+    "connector.class": "com.github.jcustenborder.kafka.connect.spooldir.SpoolDirSchemaLessJsonSourceConnector",
+    "tasks.max": "1",
+    "input.path": "/data/shop_api_stage",
+    "error.path": "/data/shop_api_error",
+    "input.file.pattern": "^.*\\.json$",
+    "cleanup.policy": "DELETE",
+    "halt.on.error": "false",
+    "topic": "goods-raw",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false"
+  }
+}

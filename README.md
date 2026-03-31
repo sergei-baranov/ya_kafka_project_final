@@ -5,10 +5,21 @@
 - [Общее описание](#general_descr)
 - [Быстрая проверка](#fast_assignment_review)
 - [Разработка: Первая итерация: Два Kafka-кластера в репликации ведущий-ведомый. Mirror Maker.](#dev_proc_iteration_1)
+  - [Узлы (сервисы в компоузере)](#dev_proc_iteration_1_nodes)
+  - [Ограничения первой фазы](#dev_proc_iteration_1_limitations)
+  - [Файлы первой итерации (для наглядности версионирования по фазам процесса разработки)](#dev_proc_iteration_1_files)
+  - [Что проверяем после итерации](#dev_proc_iteration_1_checks)
+  - [Запускаемся после первой фазы и проверяемся](#dev_proc_iteration_1_run)
+  - [План на Итерацию 2](#dev_proc_iteration_1_next_iteration_planning)
 - [Разработка: Вторая итерация: SHOP API. Kafka Connect, Schema Registry, Faust.](#dev_proc_iteration_2)
-  - [Kafka connect, source-коннектор shop-api-stage-reader (SpoolDirSchemaLessJsonSourceConnector)](#dev_proc_iteration_2_1)
-  - [Schema Registry](#dev_proc_iteration_2_2)
-  - [Faust-приложение](#dev_proc_iteration_2_3)
+  - [Узлы (сервисы в компоузере)](#dev_proc_iteration_2_nodes)
+  - [Файлы второй итерации (для наглядности версионирования по фазам процесса разработки)](#dev_proc_iteration_2_files)
+  - [Что проверяем после итерации](#dev_proc_iteration_2_checks)
+  - [2.1. Kafka connect, source-коннектор shop-api-stage-reader (SpoolDirSchemaLessJsonSourceConnector)](#dev_proc_iteration_2_1)
+  - [2.2. Schema Registry](#dev_proc_iteration_2_2)
+  - [2.3. Faust-приложение](#dev_proc_iteration_2_3)
+  - [2.4. План на Итерацию 3](#dev_proc_iteration_2_4)
+- [Разработка: Третья итерация: CLIENT API. PostgreSQL.](#dev_proc_iteration_3)
 
 ## <a name="general_descr">Общее описание</a>
 
@@ -41,14 +52,14 @@
 
 ## <a name="dev_proc_iteration_1">Разработка: Первая итерация: Два Kafka-кластера в репликации ведущий-ведомый. Mirror Maker.</a>
 
-### Узлы (сервисы в компоузере)
+### <a name="dev_proc_iteration_1_nodes">Узлы (сервисы в компоузере)</a>
 
 - два кафка-кластера, каждый в своей докер-сети, `KRaft`, в каждом кластере три контроллера и три брокера, SSL(TLS)/SASL/ACL
 - `kafka-ui`, в двух сетях, настройка на два кластера, ACL даёт "много прав" (для упрощения)
 - служебный узел для автосоздания топика, в двух сетях, отрабатывает и умирает
 - узел для запуска `Mirror Maker 1`, в двух сетях, репликация одного топика из ведущего кластера в ведомый
 
-### Ограничения первой фазы
+### <a name="dev_proc_iteration_1_limitations">Ограничения первой фазы</a>
 
 - **Сертификаты** - подготавливаем руками до разворачивания проекта (есть bash-скрипт, см. его код перед зхапуском), прокидываем volume-ами
 - **Настройка ACL** - bash-скриптами, запускаемыми руками на брокере каждого из двух кластеров. Предварительно же обозначаем трёх суперпользователей в каждом кластере.
@@ -56,7 +67,7 @@
 - Ограничения ресурсов контейнеров через deploy-секции compose: минимальный ресурс, для запуска на одной машине
 - Конфигурирование через `env`-файл: насколько возможно, при изменении конфига требуются так же небольшие изменения в `bash`-скриптах, `entrypoint`-ах сервисов компоузера, пересоздание сертификатов и т.п., в зависимости от изменений
 
-### Файлы первой итерации (для версионирования по фазам процесса разработки)
+### <a name="dev_proc_iteration_1_files">Файлы первой итерации (для наглядности версионирования по фазам процесса разработки)</a>
 
 ```bash
 tree -a phase1
@@ -72,13 +83,13 @@ phase1
 └── make-certs.sh
 ```
 
-### Что проверяем после итерации
+### <a name="dev_proc_iteration_1_checks">Что проверяем после итерации</a>
 
 Что у нас есть два кластера, которые запускаются и не падают, и что сообщения из определённого топика реплицируются из одного в другой.
 
 Так же убеждаемся, что работают ACL (в части пользователя Кафка юи), делая ошибки в сертификатах (в SAN) так же убеждаемся, что работает SSL(TLS)+SASL.
 
-### Запускаемся после перфой фазы и проверяемся
+### <a name="dev_proc_iteration_1_run">Запускаемся после первой фазы и проверяемся</a>
 
 Копируем содержимое директории `phase1` в директорию проета на хостовой машине, идём по шагам:
 
@@ -192,7 +203,7 @@ tesla@tesla:/media/tesla/NETAC_4T/VCS/ya_kafka_project_final$
 
 **ДА, ВСЁ РАБОТАЕТ, УРА.**
 
-### План на Итерацию 2
+### <a name="dev_proc_iteration_1_next_iteration_planning">План на Итерацию 2</a>
 
 **Теперь надо реализовать `SHOP API`**, для этого
 
@@ -211,7 +222,7 @@ tesla@tesla:/media/tesla/NETAC_4T/VCS/ya_kafka_project_final$
 Как-то так (предварительно).
 
 ---
-<div style="text-size:small;font-style:italic;">
+<div style="font-size:10px;font-style:italic;">
 `goods-raw`, `goods-filtered`, `goods-dlq`, `goods-prohibited`
 
 - `goods-raw`: сюда пишет Kafka Connect
@@ -242,7 +253,97 @@ Faust-приложение для CLIENT API - это про другое, пр�
 
 ## <a name="dev_proc_iteration_2">Разработка: Вторая итерация: SHOP API. Kafka Connect, Schema Registry, Faust.</a>
 
-### <a name="dev_proc_iteration_2_1">Kafka connect, source-коннектор shop-api-stage-reader (SpoolDirSchemaLessJsonSourceConnector)</a>
+### <a name="dev_proc_iteration_2_nodes">Узлы (сервисы в компоузере)</a>
+
+```bash
+--services
+
+stage-controller-1
+stage-controller-2
+stage-controller-3
+
+stage-broker-1
+stage-broker-2
+stage-broker-3
+
+mart-controller-1
+mart-controller-2
+mart-controller-3
+
+mart-broker-1
+mart-broker-2
+mart-broker-3
+
+mirror-maker
+schema-registry
+kafka-connect
+kafka-ui
+
+topic-creation
+schemas-registrator
+connectors-registrator
+
+shop-api-app
+
+-- networks
+
+ya-kafka-pf-stage
+ya-kafka-pf-mart
+
+```
+
+### <a name="dev_proc_iteration_2_files">Файлы второй итерации (для наглядности версионирования по фазам процесса разработки)</a>
+
+```bash
+tree -a phase2
+phase2
+├── ca.cnf
+├── compose.yaml
+├── .env.example
+├── etc-kafka-secrets
+│   ├── kafka-connect_shop_api.conf.json
+│   ├── kafka.keystore.pkcs12
+│   ├── kafka.truststore.jks
+│   ├── product.avsc
+│   ├── setup-acls-mart.sh
+│   ├── setup-acls-stage.sh
+│   └── setup-schemas.sh
+├── kafka.cnf.template
+├── kafka-connect
+│   ├── Dockerfile
+│   └── plugins
+│       └── kafka-connect-spooldir
+│           ├── ...
+│           ├── kafka-connect-spooldir-2.0.71.jar
+│           ├── ...
+├── make-certs.sh
+├── shop-api-app
+│   ├── app
+│   │   ├── requirements.txt
+│   │   └── shop_api
+│   │       ├── agents.py
+│   │       ├── app.py
+│   │       ├── commands.py
+│   │       ├── __init__.py
+│   │       ├── __main__.py
+│   │       ├── models.py
+│   │       ├── pages.py
+│   │       ├── tables.py
+│   │       └── topics.py
+│   ├── Dockerfile
+│   └── supervisord.conf
+└── shop_api_fixtures
+    ├── boo.json
+    ├── moo.json
+    ├── store_001_1.json
+    └── store_001_2.json
+```
+
+### <a name="dev_proc_iteration_2_checks">Что проверяем после итерации</a>
+
+После заполнения списка стоп-слов (запрещённые подстроки в названиях товаров) в cli api и перемещения файлов из директории `shop_api_fixtures` в директорию `kafka-connect/data/shop_api_stage`, автоматический data-pipeline заполняет топики `goods-raw`, `goods-dlq`, `goods-prohibited`, `goods-filtered` в Kafka-кластере `kafka-stage-cluster` и топик `goods-filtered` в Kafka-кластере `kafka-mart-cluster`.
+
+### <a name="dev_proc_iteration_2_1">2.1. Kafka connect, source-коннектор shop-api-stage-reader (SpoolDirSchemaLessJsonSourceConnector)</a>
 
 Файлы из директории `shop_api_stage` Kafka-коннектором `SpoolDirSchemaLessJsonSourceConnector` будут писаться в топик `goods-raw` без схемы.
 
@@ -624,7 +725,7 @@ sudo docker logs kafka-connect | grep "oo.json"
 **Всё прекрасно опять.**
 
 
-### <a name="dev_proc_iteration_2_2">Schema Registry</a>
+### <a name="dev_proc_iteration_2_2">2.2. Schema Registry</a>
 
 На данный момент `Kafka Connect` перемещает товары от магазинов из дректории с файлами в формате `Streaming JSON` в топик `goods-raw` на `stage`-кластере Kafka, а `Mirror Maker 1` реплицирует топик `goods-filtered` со `stage`-кластера в `mart`-кластер.
 
@@ -886,7 +987,7 @@ curl -s \
 
 Всё работает, можно делать Faust-приложение.
 
-### <a name="dev_proc_iteration_2_3">Faust-приложение</a>
+### <a name="dev_proc_iteration_2_3">2.3. Faust-приложение</a>
 
 #### Что куда добавляем
 
@@ -1216,3 +1317,18 @@ sudo docker logs -n 10 shop-api-app
 
 **Всё, SHOP API работает: дата-пайплайн проводит файлы из стейдж-директории через фильтры в топики на stahe-кластере и в топик на mart-кластере.**
 
+
+### <a name="dev_proc_iteration_2_4">2.4. План на Итерацию 3</a>
+
+- вводим в проект Postgres. Одну ноду, так как уже нет ресурсов на хостовой машине, а к учебному курсу построение рсубд-кластеров отношения не имеет. создание необходимых таблиц - в инит-скрипт постгрес-контейнера (предположительно)
+- настраиваем отправку сообщений из топика `goods-filtered` в таблицу в постгресе. предположительно через Kafka Connect. режим апсерта.
+- CLIENT API: реализуем поиск товаров по имени. чтобы не плодить контейнеры, реализуем в уже имеющемся Faust-приложении на уровне http-метода (pages.py). На вход - id пользователя и word для поиска. Искать будем в Постгресе, в таблице `goods-filtered`, LIKE-ом по имени товара. На выход просто список товаров, например идентификатор и название.
+- эта же операция CLIENT API должна отправлять сообщение в топик Кафки. Назовём его `client-api-search`. Два поля: ид пользователя, слово для поиска. Наверное привяжем к простой avro-схеме.
+- топик `client-api-search` должен реплицироваться в потсгрес. в одноимённую таблицу. Думаю, что тоже Кафка Коннектом, только надо бы агрегировать. Но можно и нет, а агрегировать потом на слое аналитики из топика. Постгрес заявлен в ТЗ как контрольная система для отладки.
+- CLIENT API: http-операция-заглушка для получения рекомендаций. На вход - ид пользователя. На выход - список товаров в виде ид + название. Источник - пока не ясно, это вопрос следующей итерации про аналитику (скорее всего ksqlDB).
+
+Таким образом для "тестирования и отладки системы" и для простого поиска товаров у нас будет Постгрес, а для следующей итерации про аналитику - топики в mart-кластере Kafka (`goods-filtered` уже есть, и добавится `client-api-search`; ну и накатаем в потоке какой-то пересчёт рекомендаций простейший: список товаров, отсортированный для текущего пользователя по кол-ву поисковых запросов, в которых он находился для клиента (это так, от-барабана-мысль пока что)).
+
+## <a name="dev_proc_iteration_3">Разработка: Третья итерация: CLIENT API. PostgreSQL.</a>
+
+TODO
