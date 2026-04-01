@@ -18,8 +18,16 @@
   - [2.1. Kafka connect, source-коннектор shop-api-stage-reader (SpoolDirSchemaLessJsonSourceConnector)](#dev_proc_iteration_2_1)
   - [2.2. Schema Registry](#dev_proc_iteration_2_2)
   - [2.3. Faust-приложение](#dev_proc_iteration_2_3)
-  - [2.4. План на Итерацию 3](#dev_proc_iteration_2_4)
+  - [План на Итерацию 3](#dev_proc_iteration_2_next_iteration_planning)
 - [Разработка: Третья итерация: CLIENT API. PostgreSQL.](#dev_proc_iteration_3)
+  - [Узлы (сервисы в компоузере)](#dev_proc_iteration_3_nodes)
+  - [Файлы третьей итерации (для наглядности версионирования по фазам процесса разработки)](#dev_proc_iteration_3_files)
+  - [Что проверяем после итерации](#dev_proc_iteration_3_checks)
+  - [3.1. Внедряем PostgreSQL в проект](#dev_proc_iteration_3_1)
+  - [3.2. Срез свежайшего состояния товаров из kafka-топика goods-filtered в postgres-таблицу goods_filtered](#dev_proc_iteration_3_2)
+  - [3.3. CLIENT API: поиск по названию товара (с логами и статистикой)](#dev_proc_iteration_3_3)
+  - [План на Итерацию 4](#dev_proc_iteration_3_next_iteration_planning)
+
 
 ## <a name="general_descr">Общее описание</a>
 
@@ -296,6 +304,7 @@ ya-kafka-pf-mart
 
 ```bash
 tree -a phase2
+
 phase2
 ├── ca.cnf
 ├── compose.yaml
@@ -1318,7 +1327,7 @@ sudo docker logs -n 10 shop-api-app
 **Всё, SHOP API работает: дата-пайплайн проводит файлы из стейдж-директории через фильтры в топики на stahe-кластере и в топик на mart-кластере.**
 
 
-### <a name="dev_proc_iteration_2_4">2.4. План на Итерацию 3</a>
+### <a name="dev_proc_iteration_2_next_iteration_planning">План на Итерацию 3</a>
 
 - вводим в проект Postgres. Одну ноду, так как уже нет ресурсов на хостовой машине, а к учебному курсу построение рсубд-кластеров отношения не имеет. создание необходимых таблиц - в инит-скрипт постгрес-контейнера (предположительно)
 - настраиваем отправку сообщений из топика `goods-filtered` в таблицу в постгресе. предположительно через Kafka Connect. режим апсерта.
@@ -1331,11 +1340,133 @@ sudo docker logs -n 10 shop-api-app
 
 ## <a name="dev_proc_iteration_3">Разработка: Третья итерация: CLIENT API. PostgreSQL.</a>
 
-### Внедряем PostgreSQL
+### <a name="dev_proc_iteration_3_nodes">Узлы (сервисы в компоузере)</a>
+
+Из сервисов компоузера добавляется только PostgreSQL.
+
+```bash
+--services
+
+postgres
+
+stage-controller-1
+stage-controller-2
+stage-controller-3
+
+stage-broker-1
+stage-broker-2
+stage-broker-3
+
+mart-controller-1
+mart-controller-2
+mart-controller-3
+
+mart-broker-1
+mart-broker-2
+mart-broker-3
+
+mirror-maker
+schema-registry
+kafka-connect
+kafka-ui
+
+topic-creation
+schemas-registrator
+connectors-registrator
+
+shop-api-app
+
+-- networks
+
+ya-kafka-pf-stage
+ya-kafka-pf-mart
+
+```
+
+В `topic-creation`, `schemas-registrator` добавляется создание/регистрация новых топиков, ACL-ов, avro-схем.
+
+В `postgres` в init-sql-скрипте прописаны создания таблиц, индексов, триггеров.
+
+В `mirror-maker` добавляем ещё один топик в репликацию на mart-кластер Кафки.
+
+В `shop-api-app` вешаем новый функционал под CLIENT API (не создаём новый сервис, используем имеющийся).
+
+Сервис `kafka-connect` не трогаем, реализуемся через Faust-приложения в `shop-api-app`.
+
+
+### <a name="dev_proc_iteration_3_files">Файлы третьей итерации (для наглядности версионирования по фазам процесса разработки)</a>
+
+```bash
+tree -a phase3
+
+phase3
+├── ca.cnf
+├── compose.yaml
+├── .env.example
+├── etc-kafka-secrets
+│   ├── client_api_search.avsc
+│   ├── kafka-connect_shop_api.conf.json
+│   ├── kafka.keystore.pkcs12
+│   ├── kafka.truststore.jks
+│   ├── product.avsc
+│   ├── setup-acls-mart.sh
+│   ├── setup-acls-stage.sh
+│   └── setup-schemas.sh
+├── kafka.cnf.template
+├── kafka-connect
+│   ├── Dockerfile
+│   └── plugins
+│       └── kafka-connect-spooldir
+│           ├── ...
+│           ├── kafka-connect-spooldir-2.0.71.jar
+│           ├── ...
+├── make-certs.sh
+├── postgres
+│   ├── custom-config.conf
+│   └── init-scripts
+│       └── create_tables.sql
+├── shop-api-app
+│   ├── app
+│   │   ├── requirements.txt
+│   │   └── shop_api
+│   │       ├── agents.py
+│   │       ├── app.py
+│   │       ├── commands.py
+│   │       ├── goods_filtered_sink.py
+│   │       ├── __init__.py
+│   │       ├── __main__.py
+│   │       ├── models.py
+│   │       ├── pages.py
+│   │       ├── tables.py
+│   │       └── topics.py
+│   ├── Dockerfile
+│   └── supervisord.conf
+└── shop_api_fixtures
+    ├── boo.json
+    ├── moo.json
+    ├── store_001_1.json
+    ├── store_001_2.json
+    ├── store_001_3.json
+    └── store_001_4.json
+```
+
+
+### <a name="dev_proc_iteration_3_checks">Что проверяем после итерации</a>
+
+- добавляем стоп-слова для запрещения товаров по названию
+- копируем файлы с фикстурами сообщений от магазинов во stage-директорию data-pipeline-а
+- убеждаемся, что сообщения разлетелись по фазам пайплайна, невалидные попали в dlq-топик, запрещённые в prohibited-топик, разрешённые в filtered-топик и в filtered-таблицу в postrgres
+- делаем несколько запросов в CLIENT API на поиск товаров по названию, убеждаемся в получении результатов поиска
+- убеждаемся, что логи и статистика поисковых запросов сохраняются в Кафка и Постгрес соответственно
+- убеждаемся в репликации двух топиков со стейдж-кластера на март-кластер
+
+### <a name="dev_proc_iteration_3_1">3.1. Внедряем PostgreSQL в проект</a>
 
 Прописали сервис в `compose.yaml`, переменные в `.env.example`, настройки в `./postgres/custom-config.conf` и инициализационный DDL в `./postgres/init-scripts/create_tables.sql`.
 
-### Репликация kafka-топика goods-filtered в postgres-таблицу goods_filtered
+### <a name="dev_proc_iteration_3_2">3.2. Срез свежайшего состояния товаров из kafka-топика goods-filtered в postgres-таблицу goods_filtered</a>
+
+#### Общее описание решения
 
 Посоветовавшись с искусственными соратниками принимаем решение использовать не Kafka Connect для этого, а прописать этот функционал в Faust-приложении - там же, где оно пишет сообщения в сам этот топик.
 
@@ -1361,7 +1492,7 @@ sudo docker logs -n 10 shop-api-app
 - `store_001_3.json`: товару "Умные часы XYZ" поместим в json целых три объекта, первому из трёх дадим самое позднее `updated_at`. При дедупликации в микробатче из трёх должен будет остаться только он, и именно его значения цены и остатка (пускай это будет 777 в этом случае) должны будут поехать на апсерт в постгрес
 - `store_001_4.json`: товару "Умные часы XYZ" поместим в json один объект, указав в `updated_at` датавремя более древнее, чем в `store_001_3.json`. Такая запись поедет в постгрес, но должна будет не примениться при апсерте, так как в апсерт мы вставим соответствующее условие.
 
-**Проверяем:**
+#### Проверяем
 
 Проверим, что всё запустилось
 
@@ -1572,4 +1703,172 @@ shop=# exit
 **Итого: всё работает как задумано, то есть в постгрес едет последний по `updated_at` товар из поступающих в микробатч с одним и тем же `product_id`, и в постгрес перезаписывается через `ON CONFLICT с условиями` только более свежий по `product_data->>updated_at` товар. Ура.**
 
 
+### <a name="dev_proc_iteration_3_3">3.3. CLIENT API: поиск по названию товара (с логами и статистикой)</a>
+
+#### Общее описание решения
+
+Делаем поиск в постгресе по ILIKE.
+
+Ендпойнт делаем только http-шный.
+
+Используем то же Faust-приложение, что мы сделали под SHOP API.
+
+Каждый запрос логируем:
+
+- в postgresql-таблицу client_api_search с агрегацией (инкрементом поля-счётчика)
+- в kafka-топик client-api-search простынёй сообщений на value из двух полей
+
+Топик вставляем в предсоздание и раздачу ACL-ов на оба Kafka-кластера, снабжаем avro-схемой, организуем репликацию топика из stage-кластера Кафки в mart-кластер, и т.п. - всё по аналогии с уже сделанными ранее задачами.
+
+#### Проверяем
+
+**1. Разворачиваем проект, заливаем данные в старт пайплайна.**
+
+```bash
+...$ sudo docker compose --env-file .env.example up -d --build
+...
+
+...$ cp ./shop_api_fixtures/* ./kafka-connect/data/shop_api_stage
+
+...$ sudo docker exec -it postgres psql -h 127.0.0.1 -U postgres-user -d shop
+shop=#
+shop=# SELECT COUNT(*) FROM goods_filtered;
+ count 
+-------
+     6
+(1 row)
+
+shop=# exit
+```
+
+6 товаров в последних стейтах в PostgreSQL.
+
+
+**2. Теперь смотрим в топик:**
+
+`http://192.168.100.225:8070/ui/clusters/stage/all-topics/goods-filtered/messages`
+
+`DONE 1 ms 4 KB 10 messages consumed`
+
+10 сообщений по товарам (4 из которых апдейты уже имеющихся товаров).
+
+
+**3. Идём делать поиск по названиям товаров (на базу из 6-ти товаров).**
+
+От трёх разных пользователей поищем тоары "умн" и "глуп" разное количество раз.
+
+`http://192.168.100.225:6077/search-good-by-name/77/%D1%83%D0%BC%D0%BD`
+
+```json
+[
+  {
+    "product_id": "111",
+    "product_name": "Умная колонка МММ"
+  },
+  {
+    "product_id": "777",
+    "product_name": "Умные часы ABC"
+  },
+  {
+    "product_id": "12345",
+    "product_name": "Умные часы XYZ"
+  }
+]
+```
+
+`http://192.168.100.225:6077/search-good-by-name/77/%D0%B3%D0%BB%D1%83%D0%BF`
+
+```json
+[
+  {
+    "product_id": "44",
+    "product_name": "Глупая колонка МММ"
+  },
+  {
+    "product_id": "555",
+    "product_name": "Глупые часы ABC"
+  },
+  {
+    "product_id": "123",
+    "product_name": "Глупые часы XYZ"
+  }
+]
+```
+
+`http://192.168.100.225:6077/search-good-by-name/1/%D1%83%D0%BC%D0%BD`
+
+`http://192.168.100.225:6077/search-good-by-name/18/%D1%83%D0%BC%D0%BD`
+`http://192.168.100.225:6077/search-good-by-name/18/%D1%83%D0%BC%D0%BD`
+`http://192.168.100.225:6077/search-good-by-name/18/%D1%83%D0%BC%D0%BD`
+
+
+**4. Смотрим статистику запросов на поиск товаров по назавнию по пользователям в PostgeSQL**
+
+```bash
+...$ sudo docker exec -it postgres psql -h 127.0.0.1 -U postgres-user -d shop
+
+shop=# SELECT * FROM client_api_search;
+ client | word | request_counter |          created_at           |          updated_at           
+--------+------+-----------------+-------------------------------+-------------------------------
+     77 | умн  |               1 | 2026-04-01 16:42:10.708105+00 | 2026-04-01 16:42:10.708105+00
+     77 | глуп |               1 | 2026-04-01 16:42:25.672408+00 | 2026-04-01 16:42:25.672408+00
+      1 | умн  |               1 | 2026-04-01 16:42:51.956601+00 | 2026-04-01 16:42:51.956601+00
+     18 | умн  |               3 | 2026-04-01 16:43:01.695445+00 | 2026-04-01 16:43:06.051861+00
+(4 rows)
+shop=# exit
+```
+
+**5. Смотрим лог запросов на поиск товаров по назавнию в Kafka**
+
+- Stage-кластер, топик `client-api-search`:
+
+`http://192.168.100.225:8070/ui/clusters/stage/all-topics/client-api-search/messages`
+
+`DONE 27 ms 82 Bytes 6 messages consumed`
+
+- Mart-кластер, топик `client-api-search`:
+
+`http://192.168.100.225:8070/ui/clusters/mart/all-topics/client-api-search/messages`
+
+`DONE 5 ms 82 Bytes 6 messages consumed`
+
+---
+
+**Итого**:
+
+И на stage-кластере, и на mart-кластере мы имеем топик `client-api-search`, представляющий собой лог запросов на поиск товаров по назавнию, в дополению к логу добавления/обновления незапрещённых товаров `goods-filtered`.
+
+В PostgreSQL мы имеем таблицу `client_api_search`, представляющую собой агрегацию по паре клиент-слово запросов клиентов на поиск товаров по назавнию, и таблицу `goods_filtered`, представляющую собой снимок самых свежих данных по каждому товару.
+
+**По CLIENT API пока всё**: у нас есть все данные для системы аналитики (рекомендаций), и после реализации той системы мы в CLIENT API добавим операцию получения рекомендаций по ид клиента.
+
+### <a name="dev_proc_iteration_3_next_iteration_planning">План на Итерацию 4</a>
+
+По идее надо забомбить "систему рекомендаций" в реальном времени: Spark Structured Streaming подключается например к логам поисковых запросов пользователя как ко стриму, и что? И ничего: ну например тупо агрегирует их, как мы это сделали в постгресе: по паре "пользователь+поисковый терм" ... ну просто в рекомендации в реалтайме пишет сообщение типа "пользователь+самый его популярный запрос", или три запроса... Пишет это в какой-то топик... В ТЗ была подсказка в виде ссылки на доку конфлюента про cleanup.policy. Можно выставить время жизни малое, политику выставить в compact. Вот и вся аналитика.
+
+В ksqldb строим таблицу, которая этот топик "срезает" по принципу оставить только самое свежее сообщение по каждому ид клиента, простая оконка.
+
+Далее - CLIENT API: операция "дайте мне рекомендацию, мой ид клиента такой-то". Операция в файст-приложении, которая получит запись из ksqldb, из неё возьмёт от ноля до трёх самых популярных посиковых термов пользователя, сходит в постгрес с запросом поисковым по ним, мимо статистики, возьмёт только COUNT(*), и напишет пользователю: чаще всего вы искали "буу", "муу" и "зуу", на данный момент у нас по ним находится столько-то товаров...
+
+Как-то так?
+
+Проверка: долбим от имени какого-то клиента, с ид 77 например, то одним поисковым запросом, то другим, и в соседней вкладке видим, как в зависимости от нашего старания меняется рекомендация.
+
+Допустим как-то так...
+
+Технически:
+
+1. Спарк-кластер, недокластер, под пайспарк. Там сейчас есть Spark Connect в 4-м ... НО: по времени успеваем взять какое-нить домашнее задание из курса DE и модифицировать spark job под текущую задачу. Посмотреть, что там за набор контейнеров оно требует, нас устроит standalone local режим на старой версии спарка, какая там была в те годы.
+
+2. KSQL два сервиса.
+
+3. Приложение уже есть - в shop-api-app на Фаусте - его и допилим на одну операци.
+
+---
+
+Ещё вариант совсем простой: агент на Фаусте, консьюмит топик, агрегируется в фауст-таблицу, её вторым агентом продьюсит в другой топик, на который уже навешена таблица в ksqldb.
+
+---
+
+"Всё сложно", "я подумаю об этом завтра".
 

@@ -1,0 +1,9 @@
+{
+  "type": "record",
+  "name": "ClientApiSearch",
+  "namespace": "com.shop.api",
+  "fields": [
+    { "name": "client", "type": "int" },
+    { "name": "word", "type": "string" }
+  ]
+}
