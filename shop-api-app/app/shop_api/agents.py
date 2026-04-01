@@ -11,6 +11,7 @@ from typing import AsyncIterable
 
 from .app import app, SSL_CONFIG, SCHEMA_REGISTRY_URL
 from .models import BlockWordMessage
+from .goods_filtered_sink import GoodsFilteredBatchSink
 from .tables import block_words_table
 from .topics import (
     blocked_words_topic, dlq_topic,
@@ -123,57 +124,63 @@ async def validator_agent(stream):
         app.logger.critical(f"Невозможно загрузить схему: {e}")
         return
 
-    async for msg_bytes in stream:
-        try:
-            # Пробуем прочитать JSON из raw топика
-            data = json.loads(msg_bytes)
-            
-            # 2. Валидация по Avro-схеме filtered (fastavro)
-            if not validate(data, filtered_parsed_schema, raise_errors=False):
-                app.logger.warning(f"SCHEMA MISMATCH (filtered): {data}")
-                await dlq_topic.send(
-                    value={"reason": "schema_mismatch_filtered", "payload": data}
-                )
-                continue
+    pg_sink = GoodsFilteredBatchSink(app.logger)
+    await pg_sink.start()
+    try:
+        async for msg_bytes in stream:
+            try:
+                # Пробуем прочитать JSON из raw топика
+                data = json.loads(msg_bytes)
 
-            # 3. Проверка имени на стоп-слова (case-insensitive substring)
-            has_stop_words, matched_words = _has_stop_words_in_name(
-                data.get("name")
-            )
-
-            if has_stop_words:
-                # Топик goods-prohibited тоже связан со схемой: валидируем отдельно
-                if not validate(data, prohibited_parsed_schema, raise_errors=False):
-                    app.logger.warning(f"SCHEMA MISMATCH (prohibited): {data}")
+                # 2. Валидация по Avro-схеме filtered (fastavro)
+                if not validate(data, filtered_parsed_schema, raise_errors=False):
+                    app.logger.warning(f"SCHEMA MISMATCH (filtered): {data}")
                     await dlq_topic.send(
-                        value={
-                            "reason": "schema_mismatch_prohibited",
-                            "payload": data,
-                            "matched_words": matched_words,
-                        }
+                        value={"reason": "schema_mismatch_filtered", "payload": data}
                     )
                     continue
 
-                await prohibited_topic.send(value=data)
-                app.logger.info(
-                    f"SENT TO PROHIBITED: {data.get('product_id', 'unknown')} "
-                    f"(matched_words={matched_words})"
+                # 3. Проверка имени на стоп-слова (case-insensitive substring)
+                has_stop_words, matched_words = _has_stop_words_in_name(
+                    data.get("name")
                 )
-            else:
-                await filtered_topic.send(value=data)
-                app.logger.info(
-                    f"SENT TO FILTERED: {data.get('product_id', 'unknown')}"
-                )
-                
-        except json.JSONDecodeError:
-            # Если в goods-raw пришёл даже не JSON
-            app.logger.error(f"INVALID JSON: {msg_bytes}")
-            await dlq_topic.send(value={
-                'reason': 'invalid_json',
-                'raw_hex': msg_bytes.hex()
-            })
-        except Exception as e:
-            app.logger.error(f"AGENT ERROR: {e}")
+
+                if has_stop_words:
+                    # Топик goods-prohibited тоже связан со схемой: валидируем отдельно
+                    if not validate(data, prohibited_parsed_schema, raise_errors=False):
+                        app.logger.warning(f"SCHEMA MISMATCH (prohibited): {data}")
+                        await dlq_topic.send(
+                            value={
+                                "reason": "schema_mismatch_prohibited",
+                                "payload": data,
+                                "matched_words": matched_words,
+                            }
+                        )
+                        continue
+
+                    await prohibited_topic.send(value=data)
+                    app.logger.info(
+                        f"SENT TO PROHIBITED: {data.get('product_id', 'unknown')} "
+                        f"(matched_words={matched_words})"
+                    )
+                else:
+                    await filtered_topic.send(value=data)
+                    await pg_sink.enqueue_filtered_product(data)
+                    app.logger.info(
+                        f"SENT TO FILTERED: {data.get('product_id', 'unknown')}"
+                    )
+
+            except json.JSONDecodeError:
+                # Если в goods-raw пришёл даже не JSON
+                app.logger.error(f"INVALID JSON: {msg_bytes}")
+                await dlq_topic.send(value={
+                    'reason': 'invalid_json',
+                    'raw_hex': msg_bytes.hex()
+                })
+            except Exception as e:
+                app.logger.error(f"AGENT ERROR: {e}")
+    finally:
+        await pg_sink.stop()
 
 @app.agent(
     blocked_words_topic

@@ -6,3 +6,5 @@ cryptography==46.0.1
 requests==2.32.5
 # Faust rocksdict больше любит, чем python-rocksdb
 rocksdict>=0.3.20
+psycopg[binary]>=3.2.0
+psycopg-pool>=3.2.0

@@ -963,7 +963,7 @@ set +a
 curl -s \
   --request GET \
   --url 'https://localhost:8081/schemas' \
-  --user producer:prod_pass \
+  --user ${SASL_UNAME_PRODUCER}:${SASL_PWD_PRODUCER} \
   --header 'Accept: application/vnd.schemaregistry.v1+json' \
   --cacert <(keytool -exportcert -rfc -keystore "./etc-kafka-secrets/kafka.truststore.jks" -storepass "${KAFKA_TRUSTSTORE_CREDS}" -alias "${KAFKA_TRUSTSTORE_ROOT_CA_ALIAS}") \
   --cert-type P12 \
@@ -1331,4 +1331,245 @@ sudo docker logs -n 10 shop-api-app
 
 ## <a name="dev_proc_iteration_3">Разработка: Третья итерация: CLIENT API. PostgreSQL.</a>
 
-TODO
+### Внедряем PostgreSQL
+
+Прописали сервис в `compose.yaml`, переменные в `.env.example`, настройки в `./postgres/custom-config.conf` и инициализационный DDL в `./postgres/init-scripts/create_tables.sql`.
+
+### Репликация kafka-топика goods-filtered в postgres-таблицу goods_filtered
+
+Посоветовавшись с искусственными соратниками принимаем решение использовать не Kafka Connect для этого, а прописать этот функционал в Faust-приложении - там же, где оно пишет сообщения в сам этот топик.
+
+(Мне очень соблазнительным (интересным) показалось организовать таблицу в постгресе на всего два поля - ид продукта + jsonb-поле со сразу всеми полями продукта, снабдив его `GIN`-индексом триграммным `gin_trgm_ops` на поле `name` для поиска по `LIKE %...%`, но сериализация всей записи в одно поле после `AvroConverter` в Kafka Connect требует написания кастомного `SMT` (Single Message Transformation) на java)
+
+В этом решении имеются минусы, но есть один важный плюс - простота/скорость реализации: на учебном проекте важным критерием является дедлайн.
+
+Для частичного покрытия тех минусов применяем
+- асинхронный psycopg 3;
+- апсерт микрлобатчами по размеру батча и времени его свежести, с дедупликацией по ПК, времени поступления записи в батч, полю updated_at;
+- управление ошибками: на транзиентные - ретраи с бэкофф на N попыток и игнор, на нетранзиентные - сразу игнор (принимаем условие некритичности несоответствия записей в постгрес относительно кафки для реализуемого функционала); пишем сначала в кафку, потом в постгрес, итогом является риск, что в постгрес не пройдут какие-то изменения, которые будут в кафке (кафка - источник правды); DLQ-топик для данной ситуации не делаем - посчитаем, что выходит за рамки учебного проекта; запись батчами увеличивает этот риск, но снижает нагрузку, компромисс - микробатчи.
+
+**В целом для учебного проекта принимаем стратегию "делаем как проще сделать + демонстрируем понимание и удовлетворительный обход узких мест".**
+
+Как проверим реализацию:
+- запустим проект
+- зальём данные во стейдж пайплайна из файлов-фикстур (создадим ещё фикстуру, которая даёт те же товары, но допустим с другими остатками)
+- увидим сообщения в топике `goods-filtered` на обоих кафка-кластерах
+- увидим товары в таблице `goods_filtered` в постгрес с меткой времени последнего **принятого** изменения и последними (и даже не по оси времени поступления событий, а по оси поля updated_at, которое в avro-схеме у нас отмечено обязательным, хоть и строковым) значениями
+
+Новые фикстуры соответственно будут такие:
+
+- `store_001_3.json`: товару "Умные часы XYZ" поместим в json целых три объекта, первому из трёх дадим самое позднее `updated_at`. При дедупликации в микробатче из трёх должен будет остаться только он, и именно его значения цены и остатка (пускай это будет 777 в этом случае) должны будут поехать на апсерт в постгрес
+- `store_001_4.json`: товару "Умные часы XYZ" поместим в json один объект, указав в `updated_at` датавремя более древнее, чем в `store_001_3.json`. Такая запись поедет в постгрес, но должна будет не примениться при апсерте, так как в апсерт мы вставим соответствующее условие.
+
+**Проверяем:**
+
+Проверим, что всё запустилось
+
+```bash
+...$ sudo docker compose --env-file .env.example up -d --build
+[+] Building 1.0s (23/23) FINISHED 
+...
+[+] up 43/43
+...
+
+
+...$ sudo docker logs postgres
+...
+2026-04-01 08:20:34.370 GMT [48] LOG:  database system is ready to accept connections
+ done
+server started
+CREATE DATABASE
+
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/create_tables.sql
+CREATE EXTENSION
+CREATE TABLE
+CREATE INDEX
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TABLE
+CREATE INDEX
+CREATE TRIGGER
+...
+
+
+...$ sudo docker exec -it postgres psql -h 127.0.0.1 -U postgres-user -d shop
+shop=# \dt
+                 List of relations
+ Schema |       Name        | Type  |     Owner     
+--------+-------------------+-------+---------------
+ public | client_api_search | table | postgres-user
+ public | goods_filtered    | table | postgres-user
+(2 rows)
+shop=# exit
+
+
+...$ curl -s http://localhost:8073/connectors | jq
+[
+  "shop-api-stage-reader"
+]
+
+
+...$ ENV_FILE="./.env.example"
+...$ set -a
+...$ source $ENV_FILE
+...$ set +a
+...$ curl -s \
+  --request GET \
+  --url 'https://localhost:8081/schemas' \
+  --user ${SASL_UNAME_PRODUCER}:${SASL_PWD_PRODUCER} \
+  --header 'Accept: application/vnd.schemaregistry.v1+json' \
+  --cacert <(keytool -exportcert -rfc -keystore "./etc-kafka-secrets/kafka.truststore.jks" -storepass "${KAFKA_TRUSTSTORE_CREDS}" -alias "${KAFKA_TRUSTSTORE_ROOT_CA_ALIAS}") \
+  --cert-type P12 \
+  --cert "./etc-kafka-secrets/kafka.keystore.pkcs12:${KAFKA_KEYSTORE_CREDS}" \
+| jq
+[
+  {
+    "subject": "goods-filtered-value",
+    "version": 1,
+    "id": 1,
+    "schema": "{\"type\":\"record\",\"name\":\"Product\",...}"
+  },
+  {
+    "subject": "goods-prohibited-value",
+    "version": 1,
+    "id": 1,
+    "schema": "{\"type\":\"record\",\"name\":\"Product\",...}"
+  }
+]
+
+
+...$ sudo docker logs shop-api-app | egrep -i "Postgres goods_filtered sink|pool не открылся"
+[2026-04-01 10:04:25,060] [7] [INFO] Postgres goods_filtered sink: batch_max=25 flush_interval_ms=150
+
+```
+
+Заливаем файлы в файловый стейдж пайплайна и попутно смотрим в рсубд:
+
+НЕ будем сейчас заполнять стоп-слова для отфильтрации товаров по названию, не в них сейчас суть.
+
+```bash
+...$ cp ./shop_api_fixtures/boo.json ./kafka-connect/data/shop_api_stage
+...$ cp ./shop_api_fixtures/moo.json ./kafka-connect/data/shop_api_stage
+...$ cp ./shop_api_fixtures/store_001_1.json ./kafka-connect/data/shop_api_stage
+...$ cp ./shop_api_fixtures/store_001_2.json ./kafka-connect/data/shop_api_stage
+
+...$ ls ./kafka-connect/data/shop_api_stage
+...$ ls ./kafka-connect/data/shop_api_error
+
+...$ sudo docker logs -n 20 shop-api-app
+[2026-04-01 12:07:53,773] [7] [INFO] SENT TO FILTERED: 111 
+
+2026-04-01 12:07:53,915 DEBG 'faust-worker' stderr output:
+[2026-04-01 12:07:53,915] [7] [INFO] goods_filtered: flush ok (2 строк, 1 ms) 
+
+2026-04-01 12:08:03,777 DEBG 'faust-worker' stderr output:
+[2026-04-01 12:08:03,777] [7] [INFO] goods_filtered: flush ok (1 строк, 2 ms) 
+
+2026-04-01 12:08:03,777 DEBG 'faust-worker' stderr output:
+[2026-04-01 12:08:03,777] [7] [INFO] SENT TO FILTERED: 123 
+
+2026-04-01 12:08:03,778 DEBG 'faust-worker' stderr output:
+[2026-04-01 12:08:03,778] [7] [INFO] SENT TO FILTERED: 777 
+
+2026-04-01 12:08:03,778 DEBG 'faust-worker' stderr output:
+[2026-04-01 12:08:03,778] [7] [INFO] SENT TO FILTERED: 44 
+
+2026-04-01 12:08:03,844 DEBG 'faust-worker' stderr output:
+[2026-04-01 12:08:03,844] [7] [INFO] goods_filtered: flush ok (2 строк, 1 ms) 
+
+# ждём сколько-то секунд, чтобы файл пошёл отдельным батчем,
+# и мы убедились, что происходит такая, как задумано,  дедупликация в батче
+...$ cp ./shop_api_fixtures/store_001_3.json ./kafka-connect/data/shop_api_stage
+
+...$ ls ./kafka-connect/data/shop_api_stage
+...$ ls ./kafka-connect/data/shop_api_error
+
+...$ sudo docker logs -n 20 shop-api-app
+...
+2026-04-01 12:09:08,304 DEBG 'faust-worker' stderr output:
+[2026-04-01 12:09:08,304] [7] [INFO] SENT TO FILTERED: 12345 
+
+2026-04-01 12:09:08,304 DEBG 'faust-worker' stderr output:
+[2026-04-01 12:09:08,304] [7] [INFO] SENT TO FILTERED: 12345 
+
+2026-04-01 12:09:08,305 DEBG 'faust-worker' stderr output:
+[2026-04-01 12:09:08,305] [7] [INFO] SENT TO FILTERED: 12345 
+
+2026-04-01 12:09:08,382 DEBG 'faust-worker' stderr output:
+[2026-04-01 12:09:08,382] [7] [INFO] goods_filtered: flush ok (1 строк, 2 ms)
+
+# очень хорошо: произошла дедупликация по нашим правилам.
+# идём смотреть, что там в постгресе: одидаем товар "12345" со свойствами "777..."
+
+...$ sudo docker exec -it postgres psql -h 127.0.0.1 -U postgres-user -d shop
+shop=# 
+shop=# SELECT
+  product_data ->> 'name' as "name",
+  product_data -> 'stock' ->> 'available' as "available",
+  product_data -> 'price' ->> 'amount' as "amount"
+FROM
+  goods_filtered
+WHERE
+  product_id = '12345'
+;
+      name      | available | amount  
+----------------+-----------+---------
+ Умные часы XYZ | 777       | 7777.77
+(1 row)
+
+shop=# exit
+
+# Ура: дедупликация в микробатче в файст-прилодении работает как задумано.
+
+# ждём сколько-то секунд, чтобы файл пошёл отдельным батчем,
+# и мы убедились, что он не проходит на уровне upsert-а в postgres
+...$ cp ./shop_api_fixtures/store_001_4.json ./kafka-connect/data/shop_api_stage
+
+...$ ls ./kafka-connect/data/shop_api_stage
+...$ ls ./kafka-connect/data/shop_api_error
+
+...$ sudo docker logs -n 20 shop-api-app
+...
+2026-04-01 12:09:08,305 DEBG 'faust-worker' stderr output:
+[2026-04-01 12:09:08,305] [7] [INFO] SENT TO FILTERED: 12345 
+
+2026-04-01 12:09:08,382 DEBG 'faust-worker' stderr output:
+[2026-04-01 12:09:08,382] [7] [INFO] goods_filtered: flush ok (1 строк, 2 ms) 
+
+2026-04-01 12:12:15,362 DEBG 'faust-worker' stderr output:
+[2026-04-01 12:12:15,362] [7] [INFO] goods_filtered: flush ok (1 строк, 2 ms) 
+
+2026-04-01 12:12:15,362 DEBG 'faust-worker' stderr output:
+[2026-04-01 12:12:15,362] [7] [INFO] SENT TO FILTERED: 12345 
+
+# асинхронщина дала не тот порядок, но по времени видно всё.
+
+# проверяем постгрес: апсерт должен был не пропустить последнюю запись,
+# и мы опять ожидаем увидеть 7777
+
+...$ sudo docker exec -it postgres psql -h 127.0.0.1 -U postgres-user -d shop
+shop=# 
+shop=# SELECT
+  product_data ->> 'name' as "name",
+  product_data -> 'stock' ->> 'available' as "available",
+  product_data -> 'price' ->> 'amount' as "amount"
+FROM
+  goods_filtered
+WHERE
+  product_id = '12345'
+;
+      name      | available | amount  
+----------------+-----------+---------
+ Умные часы XYZ | 777       | 7777.77
+(1 row)
+
+shop=# exit
+
+# Ура: условный апсерт тоже отработал как задумано...
+
+```
+
+**Итого: всё работает как задумано, то есть в постгрес едет последний по `updated_at` товар из поступающих в микробатч с одним и тем же `product_id`, и в постгрес перезаписывается через `ON CONFLICT с условиями` только более свежий по `product_data->>updated_at` товар. Ура.**
+
+
+
