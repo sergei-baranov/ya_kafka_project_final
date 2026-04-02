@@ -86,4 +86,47 @@ else
 fi
 
 
+register_subject_from_file() {
+  local SUBJECT="$1"
+  local FILE_REL="$2"
+  local CLEAN=$(
+    cat "${CONTAINER_PATH_SECRETS}/${FILE_REL}" \
+      | python3 -c "import sys, json; print(json.dumps(sys.stdin.read()))"
+  )
+  local JSON_BODY="{\"schema\": $CLEAN}"
+
+  echo "--- Работа с $SUBJECT (файл $FILE_REL) ---"
+  echo "Установка режима $COMPATIBILITY_LEVEL..."
+  local CONF_RESULT
+  CONF_RESULT=$(do_schema_registry_rest_curl PUT "/config/$SUBJECT" "$CONFIG_BODY")
+  echo "Результат: $CONF_RESULT"
+
+  local CHECK_RESULT
+  CHECK_RESULT=$(do_schema_registry_rest_curl POST "/compatibility/subjects/$SUBJECT/versions/latest" "$JSON_BODY")
+  echo "CHECK_RESULT (/compatibility/subjects/${SUBJECT}/versions/latest): ${CHECK_RESULT}"
+
+  local IS_COMPAT
+  IS_COMPAT=$(echo "$CHECK_RESULT" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('is_compatible', True))")
+  echo "IS_COMPATIBLE: ${IS_COMPAT}"
+
+  if [[ "${IS_COMPAT,,}" == "true" ]]; then
+    echo "Схема прошла проверку $COMPATIBILITY_LEVEL."
+    local REG_RESULT
+    REG_RESULT=$(do_schema_registry_rest_curl POST "/subjects/$SUBJECT/versions" "$JSON_BODY")
+    local NEW_ID
+    NEW_ID=$(echo "$REG_RESULT" | python3 -c "import sys, json; print(json.load(sys.stdin).get('id', 'error'))")
+    echo "Зарегистрирована! ID: $NEW_ID"
+  else
+    echo "ОШИБКА: схема $SUBJECT не соответствует $COMPATIBILITY_LEVEL"
+    echo "Детали: $CHECK_RESULT"
+    exit 1
+  fi
+}
+
+
+echo "--- 3. client-recommendations: Avro key + value (топик mart) ---"
+register_subject_from_file "${TOPIC_CLIENT_RECOMMENDATIONS}-key" "${CLIENT_RECOMMENDATIONS_KEY_AVRO_SCHEMA_FILE_NAME}"
+register_subject_from_file "${TOPIC_CLIENT_RECOMMENDATIONS}-value" "${CLIENT_RECOMMENDATIONS_VALUE_AVRO_SCHEMA_FILE_NAME}"
+
+
 echo "--- Настройка завершена! ---"

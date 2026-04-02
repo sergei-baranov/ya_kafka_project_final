@@ -1055,6 +1055,93 @@ services:
           cpus: '${SERVICE_CONNECTORS_REGISTRATOR_RESERVE_CPUS}'
           memory: ${SERVICE_CONNECTORS_REGISTRATOR_RESERVE_MEMORY}
 
+  # Spark mart: Structured Streaming -> client-recommendations
+  spark-master:
+    image: ${IMAGE_SPARK}
+    container_name: ${SERVICE_SPARK_MASTER_NAME}
+    hostname: ${SERVICE_SPARK_MASTER_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
+    environment:
+      SPARK_MODE: master
+      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
+      SPARK_RPC_ENCRYPTION_ENABLED: "no"
+      SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: "no"
+      SPARK_SSL_ENABLED: "no"
+    ports:
+      - "${SERVICE_SPARK_MASTER_UI_PORT_EXPOSE}:8080"
+    networks:
+      - ${MART_CLUSTER_NETWORK}
+    deploy:
+      resources:
+        limits:
+          memory: ${SERVICE_SPARK_LIMIT_MEMORY}
+        reservations:
+          memory: ${SERVICE_SPARK_RESERVE_MEMORY}
+
+  spark-worker:
+    image: ${IMAGE_SPARK}
+    container_name: ${SERVICE_SPARK_WORKER_NAME}
+    hostname: ${SERVICE_SPARK_WORKER_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
+    depends_on:
+      spark-master:
+        condition: service_started
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://${SERVICE_SPARK_MASTER_NAME}:7077
+      SPARK_WORKER_MEMORY: 1G
+      SPARK_WORKER_CORES: "2"
+      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
+      SPARK_RPC_ENCRYPTION_ENABLED: "no"
+      SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: "no"
+      SPARK_SSL_ENABLED: "no"
+    volumes:
+      # Executor'ы читают Kafka (SSL/SASL) — те же пути, что в kafka_opts job'а
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
+    networks:
+      - ${MART_CLUSTER_NETWORK}
+    deploy:
+      resources:
+        limits:
+          memory: ${SERVICE_SPARK_LIMIT_MEMORY}
+        reservations:
+          memory: ${SERVICE_SPARK_RESERVE_MEMORY}
+
+  spark-recommendations-job:
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+      args:
+        - IMAGE_SPARK=${IMAGE_SPARK}
+    image: ${IMAGE_SPARK_RECOMMENDATIONS_JOB}
+    # тег только локальный — не тянуть с Docker Hub
+    pull_policy: never
+    container_name: ${SERVICE_SPARK_JOB_NAME}
+    hostname: ${SERVICE_SPARK_JOB_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
+    depends_on:
+      spark-worker:
+        condition: service_started
+      mirror-maker:
+        condition: service_started
+      schemas-registrator:
+        condition: service_completed_successfully
+    volumes:
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
+      - spark_recommendations_checkpoint:${SPARK_CHECKPOINT_DIR}
+    networks:
+      - ${MART_CLUSTER_NETWORK}
+      - ${STAGE_CLUSTER_NETWORK}
+    deploy:
+      resources:
+        limits:
+          memory: ${SERVICE_SPARK_LIMIT_MEMORY}
+        reservations:
+          memory: ${SERVICE_SPARK_RESERVE_MEMORY}
+
   # shop-api-app
   shop-api-app:
     build:
@@ -1078,6 +1165,44 @@ services:
     tty: true
     networks:
       - ${STAGE_CLUSTER_NETWORK}
+
+    ksqldb-server:
+    image: ${IMAGE_KSQLDB_SERVER}
+    container_name:  ${SERVICE_KSQLDB_SERVER_NAME}
+    hostname: ${SERVICE_KSQLDB_SERVER_NAME}
+    depends_on:
+      - ${MB_1_NAME}
+      - ${MB_2_NAME}
+      - ${MB_3_NAME}
+      - ${SERVICE_SCHEMA_REGISTRY_NAME}
+    ports:
+      - "${SERVICE_KSQLDB_SERVER_PORT_EXPOSE}:${SERVICE_KSQLDB_SERVER_PORT}"
+    networks:
+      - ${MART_CLUSTER_NETWORK}
+      - ${STAGE_CLUSTER_NETWORK}
+    volumes:
+      - ksqldb_server_extensions:/opt/ksqldb-udfs
+    environment:
+      - KSQL_LISTENERS=http://0.0.0.0:8088
+      - KSQL_BOOTSTRAP_SERVERS=kafka-0:9092,kafka-1:9092,kafka-2:9092
+      - KSQL_KSQL_SCHEMA_REGISTRY_URL=http://schema-registry:8081
+      - KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE=true
+      - KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE=true
+      # Configuration for UDFs
+      - KSQL_KSQL_EXTENSION_DIR=/opt/ksqldb-udfs
+
+  ksqldb-cli:
+    image: ${IMAGE_KSQLDB_CLI}
+    container_name:  ${SERVICE_KSQLDB_CLI_NAME}
+    hostname:  ${SERVICE_KSQLDB_CLI_NAME}
+    depends_on:
+      - ksqldb-server
+    networks:
+      - ${MART_CLUSTER_NETWORK}
+      - ${STAGE_CLUSTER_NETWORK}
+    # docker exec -it ksqldb-cli ksql http://ksqldb-server:8088
+    stdin_open: true
+    tty: true
 
 networks:
   ya-kafka-pf-stage:
@@ -1103,4 +1228,5 @@ volumes:
   schemas-registrator_data:
   connectors-registrator_data:
   mirror-maker_data:
+  spark_recommendations_checkpoint:
   shop-api-app_data:

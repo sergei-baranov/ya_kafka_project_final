@@ -4,29 +4,34 @@
 
 - [Общее описание](#general_descr)
 - [Быстрая проверка](#fast_assignment_review)
-- [Разработка: Первая итерация: Два Kafka-кластера в репликации ведущий-ведомый. Mirror Maker.](#dev_proc_iteration_1)
+- [Разработка: Итерация 1: Два Kafka-кластера в репликации ведущий-ведомый. Mirror Maker.](#dev_proc_iteration_1)
   - [Узлы (сервисы в компоузере)](#dev_proc_iteration_1_nodes)
   - [Ограничения первой фазы](#dev_proc_iteration_1_limitations)
-  - [Файлы первой итерации (для наглядности версионирования по фазам процесса разработки)](#dev_proc_iteration_1_files)
+  - [Файлы 1-й итерации (для наглядности версионирования по фазам процесса разработки)](#dev_proc_iteration_1_files)
   - [Что проверяем после итерации](#dev_proc_iteration_1_checks)
   - [Запускаемся после первой фазы и проверяемся](#dev_proc_iteration_1_run)
   - [План на Итерацию 2](#dev_proc_iteration_1_next_iteration_planning)
-- [Разработка: Вторая итерация: SHOP API. Kafka Connect, Schema Registry, Faust.](#dev_proc_iteration_2)
+- [Разработка: Итерация 2: SHOP API. Kafka Connect, Schema Registry, Faust.](#dev_proc_iteration_2)
   - [Узлы (сервисы в компоузере)](#dev_proc_iteration_2_nodes)
-  - [Файлы второй итерации (для наглядности версионирования по фазам процесса разработки)](#dev_proc_iteration_2_files)
+  - [Файлы 2-й итерации (для наглядности версионирования по фазам процесса разработки)](#dev_proc_iteration_2_files)
   - [Что проверяем после итерации](#dev_proc_iteration_2_checks)
   - [2.1. Kafka connect, source-коннектор shop-api-stage-reader (SpoolDirSchemaLessJsonSourceConnector)](#dev_proc_iteration_2_1)
   - [2.2. Schema Registry](#dev_proc_iteration_2_2)
   - [2.3. Faust-приложение](#dev_proc_iteration_2_3)
   - [План на Итерацию 3](#dev_proc_iteration_2_next_iteration_planning)
-- [Разработка: Третья итерация: CLIENT API. PostgreSQL.](#dev_proc_iteration_3)
+- [Разработка: Итерация 3: CLIENT API. PostgreSQL.](#dev_proc_iteration_3)
   - [Узлы (сервисы в компоузере)](#dev_proc_iteration_3_nodes)
-  - [Файлы третьей итерации (для наглядности версионирования по фазам процесса разработки)](#dev_proc_iteration_3_files)
+  - [Файлы 3-й итерации (для наглядности версионирования по фазам процесса разработки)](#dev_proc_iteration_3_files)
   - [Что проверяем после итерации](#dev_proc_iteration_3_checks)
   - [3.1. Внедряем PostgreSQL в проект](#dev_proc_iteration_3_1)
   - [3.2. Срез свежайшего состояния товаров из kafka-топика goods-filtered в postgres-таблицу goods_filtered](#dev_proc_iteration_3_2)
   - [3.3. CLIENT API: поиск по названию товара (с логами и статистикой)](#dev_proc_iteration_3_3)
   - [План на Итерацию 4](#dev_proc_iteration_3_next_iteration_planning)
+- [Разработка: Итерация 4: Apache Spark. KSQLDB. Рекомендации.](#dev_proc_iteration_4)
+  - [Узлы (сервисы в компоузере)](#dev_proc_iteration_4_nodes)
+  - [Файлы 4-й итерации (для наглядности версионирования по фазам процесса разработки)](#dev_proc_iteration_4_files)
+  - [Что проверяем после итерации](#dev_proc_iteration_4_checks)
+  - [4.1. Внедряем Apache Spark в проект + простейший job про рекомендации](#dev_proc_iteration_4_1)
 
 
 ## <a name="general_descr">Общее описание</a>
@@ -58,7 +63,17 @@
 
 ...
 
-## <a name="dev_proc_iteration_1">Разработка: Первая итерация: Два Kafka-кластера в репликации ведущий-ведомый. Mirror Maker.</a>
+```
+sudo docker compose --env-file .env.example up -d --build
+
+192.168.100.225 === localhost
+
+как просматривать в kafka UI
+```
+
+...
+
+## <a name="dev_proc_iteration_1">Разработка: Итерация 1: Два Kafka-кластера в репликации ведущий-ведомый. Mirror Maker.</a>
 
 ### <a name="dev_proc_iteration_1_nodes">Узлы (сервисы в компоузере)</a>
 
@@ -230,7 +245,7 @@ tesla@tesla:/media/tesla/NETAC_4T/VCS/ya_kafka_project_final$
 Как-то так (предварительно).
 
 ---
-<div style="font-size:10px;font-style:italic;">
+
 `goods-raw`, `goods-filtered`, `goods-dlq`, `goods-prohibited`
 
 - `goods-raw`: сюда пишет Kafka Connect
@@ -256,10 +271,9 @@ Faust-приложение для CLIENT API - это про другое, пр�
 Тестирование и отладка: Продумать...
 
 Чего нам надо добиться на этом этапе: `goods-filtered` на втором кластере, заполнен из файлов, по авро-схеме...
-</div>
 
 
-## <a name="dev_proc_iteration_2">Разработка: Вторая итерация: SHOP API. Kafka Connect, Schema Registry, Faust.</a>
+## <a name="dev_proc_iteration_2">Разработка: Итерация 2: SHOP API. Kafka Connect, Schema Registry, Faust.</a>
 
 ### <a name="dev_proc_iteration_2_nodes">Узлы (сервисы в компоузере)</a>
 
@@ -1338,7 +1352,7 @@ sudo docker logs -n 10 shop-api-app
 
 Таким образом для "тестирования и отладки системы" и для простого поиска товаров у нас будет Постгрес, а для следующей итерации про аналитику - топики в mart-кластере Kafka (`goods-filtered` уже есть, и добавится `client-api-search`; ну и накатаем в потоке какой-то пересчёт рекомендаций простейший: список товаров, отсортированный для текущего пользователя по кол-ву поисковых запросов, в которых он находился для клиента (это так, от-барабана-мысль пока что)).
 
-## <a name="dev_proc_iteration_3">Разработка: Третья итерация: CLIENT API. PostgreSQL.</a>
+## <a name="dev_proc_iteration_3">Разработка: Итерация 3: CLIENT API. PostgreSQL.</a>
 
 ### <a name="dev_proc_iteration_3_nodes">Узлы (сервисы в компоузере)</a>
 
@@ -1871,4 +1885,100 @@ shop=# exit
 ---
 
 "Всё сложно", "я подумаю об этом завтра".
+
+
+## <a name="dev_proc_iteration_4">Разработка: Итерация 4: Apache Spark. KSQLDB. Рекомендации.</a>
+
+### <a name="dev_proc_iteration_4_1">4.1. Внедряем Apache Spark в проект + простейший job про рекомендации</a>
+
+#### Описание
+
+Получилось три новых сервиса, новый топик, новые права, новые схемы.
+
+Новые сервисы в compose-проекте: `spark-master`, `spark-worker`, `spark-recommendations-job`.
+
+Все три включены только в сеть `ya-kafka-pf-mart`.
+
+Новый топик - `client-recommendations`.
+Топик сконфигурирован на политики `cleanup.policy=compact,delete`, что поможет дальнейшей агрегации на клиенте (хотели заиспользовать ksqldb на следующем этапе).
+
+Job читает стрим из топика `client-api-search` в кластере `kafka-mart-cluster`, агрегирует, получает по каждому клиенту топ 5 самых частотных запросов, отправляет в топик `client-recommendations` того же кластера.
+
+И чтение, и запись идут с использованием avro-схем из Schema Registry, отсюда определённые особенности реализации. Я впервые работаю с топиками со схемами, просто пока что верю в слова искусственного компаньона:
+
+```
+Итого: цикл + файл — это практичный компромисс:
+SR/fastavro на драйвере и накопительные счётчики без `mapGroupsWithState`
+и без отдельного state backend.
+Более «правильный» вариант — распарсить поток в табличный вид,
+агрегаты считать DataFrame API/`groupBy`,
+а состояние между батчами вести через stateful streaming
+или внешнее хранилище;
+в sink всё равно чаще упираются в foreachBatch
+(или библиотеку) ради Confluent Avro.
+```
+
+В любом случае, это не настоящая аналитика, проект учебный, а курс не про Спарк...
+
+#### Проверка работоспособности этапа
+
+Разворачиваемся:
+
+```bash
+sudo docker compose --env-file .env.example up -d --build
+...
+sudo docker ps -a
+...
+sudo docker logs ...
+...
+```
+
+Закинем глупые устройства в запрещённые товары через задание "глуп" в стоп-слова:
+
+```bash
+...$ sudo docker exec -it shop-api-app bash
+
+...# faust -A shop_api.app block-word --word глуп --block True
+sending BlockWordMessage
+sent: word='глуп' block=True
+
+...# faust -A shop_api.app list-block-words
+{'глуп': True}
+...# exit
+exit
+```
+
+Запустим в дата-пайплыйн все наши файлы-фикстуры от магазинов:
+
+```bash
+...$ cp ./shop_api_fixtures/* ./kafka-connect/data/shop_api_stage
+```
+
+Поищем товары с названиями, содержащими "глуп" и "умн" от пользователей 11 и 222
+
+```bash
+...$ curl -s http://localhost:6077/search-good-by-name/11/%D1%83%D0%BC%D0%BD
+...
+...$ curl -s http://localhost:6077/search-good-by-name/11/%D0%B3%D0%BB%D1%83%D0%BF
+...
+...$ curl -s http://localhost:6077/search-good-by-name/22/%D1%83%D0%BC%D0%BD
+...
+...$ curl -s http://localhost:6077/search-good-by-name/22/%D0%B3%D0%BB%D1%83%D0%BF
+...
+```
+
+
+И теперь в Kafka UI, в топике `client-recommendations` `mart`-кластера мы должны увидеть не менее двух сообщений
+
+`http://192.168.100.225:8070/ui/clusters/mart/all-topics/client-recommendations/messages`
+
+`DONE 28 ms 120 Bytes 2 messages consumed`
+
+**Всё прекрасно: поисковые запросы пользователей в реалтайме превращаются в квази-рекомендации в топике client-recommendations mart-кластера Кафки при помощи pyaspark-job-а.**
+
+
+### <a name="dev_proc_iteration_4_2">4.2. Внедряем в проект KSQLDB + операция получения рекомендаций в Faust-приложении</a>
+
+TODO
+
 

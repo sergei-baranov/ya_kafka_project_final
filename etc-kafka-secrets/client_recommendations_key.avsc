@@ -1,0 +1,8 @@
+{
+  "type": "record",
+  "name": "ClientRecommendationsKey",
+  "namespace": "com.shop.api",
+  "fields": [
+    { "name": "client", "type": "int" }
+  ]
+}
