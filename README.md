@@ -3,6 +3,11 @@
 ## Содержание
 
 - [Общее описание](#general_descr)
+  - [Описание](#general_descr_descr)
+  - [Используемые технологии](#general_descr_technologies)
+  - [Схема сервисов, дата-пайплайн, взаимодействие](#general_descr_schemas)
+  - [TODO на потом (техдолг и т.п.)](#general_descr_todo)
+  - [Как проверять проект](#general_assignment_review)
 - [Быстрая проверка](#fast_assignment_review)
 - [Разработка: Итерация 1: Два Kafka-кластера в репликации ведущий-ведомый. Mirror Maker.](#dev_proc_iteration_1)
   - [Узлы (сервисы в компоузере)](#dev_proc_iteration_1_nodes)
@@ -32,13 +37,32 @@
   - [Файлы 4-й итерации (для наглядности версионирования по фазам процесса разработки)](#dev_proc_iteration_4_files)
   - [Что проверяем после итерации](#dev_proc_iteration_4_checks)
   - [4.1. Внедряем Apache Spark в проект + простейший job про рекомендации](#dev_proc_iteration_4_1)
-
+  - [4.2. Внедряем в проект KSQLDB + операция получения рекомендаций в Faust-приложении](#dev_proc_iteration_4_2)
+    - [4.2.1. Общее описание](#dev_proc_iteration_4_2_1)
+    - [4.2.2. Поработаем с ksql db через веб-интерфейс kafka-ui](#dev_proc_iteration_4_2_2)
+    - [4.2.3. Или через cli-консоль](#dev_proc_iteration_4_2_3)
+    - [4.2.4. Внедряем автосоздание этой таблицы в процесс развёртывания compose-проекта](#dev_proc_iteration_4_2_4)
+    - [4.2.5. Http-операция получения рекомендаций (Faust-приложение)](#dev_proc_iteration_4_2_5)
+  - [План на Итерацию 5](#dev_proc_iteration_4_next_iteration_planning)
+- [Разработка: Итерация 5: Мониторинг: Prometheus, Grafana](#dev_proc_iteration_5)
 
 ## <a name="general_descr">Общее описание</a>
 
-...
+### <a name="general_descr_descr">Описание</a>
 
-### Зависимости сервисов
+TODO
+
+### <a name="general_descr_technologies">Используемые технологии</a>
+
+TODO
+
+  Apache Kafka, SSL(mTLS)/SASL/ACL, Kafka Connect, Schema Registry, Mirror Maker, Avro, Grafana, Prometheus, ksqlDB, Apache Spark, Spark Structured Streaming, Faust-streaming, docker, docker compose, python, PostgreSQL
+
+### <a name="general_descr_schemas">Схема сервисов, дата-пайплайн, взаимодействие</a>
+
+TODO
+
+Зависимости сервисов
 
 - Сначала надо развернуть два кафка-кластера
 - Затем надо запустить сервис, который создаст необходимые топики, в частности служебные для разных сервисов, и выставит ACL-ы (завершается после выполнения задания) (завершается после выполнения задания) (завершается после выполнения задания). Это позволит нам сузить права некоторым сервисам, не давая им слишком много прав для создания ими служебных тоиков и т.п.
@@ -46,32 +70,35 @@
 - А вслед за ним - сервис, который зарегистрирует в Schema Registry необходимые для работы прочих сервисов схемы под необходимые топики (завершается после выполнения задания).
 - После этого можно запускать Mirror Maker 1, за ним Kafka Connect, сервисы приложений и т.п.
 
-### стратегические (на совсем потом) TODO
+### <a name="general_descr_todo">TODO на потом (техдолг и т.п.)</a>
+
+TODO
 
 - Транзакционность и идемпотентность продьюсера Schema Registry (не снимая концепцию ограничения кастомного пользователя конкретными ACL-ами)
 - Кластеризация Schema Registry (полезно)
 - Faust-streaming заменить на FastStream `https://faststream.ag2.ai/latest/` (`aiokafka` не поддерживает Кафку 4, и вроде даже не собирается, соотв. и Faust-streaming, а вот FastStream посволяет использовать под капотом confluent, и вообще "он лучше")
 - `exactly_once` в Faust-приложения (`processing_guarantee='exactly_once'`, но реализовать надо, не снимая концепцию ограничения кастомного пользователя конкретными ACL-ами под каждый сервис проекта)
 - `kafka-connect` на SSL (mTLS)
+- из `etc-kafka-secrets` не-секреты (avro-схемы, sh для бутстрапа и т.п.) разнести по вольюмам сервисов-бутстраперов например и т.п.
+- пробежаться по сервисам проверить, кого не ограничили по памяти - того ограничить (соотнести с ограничениями внутри контейнеров, во избежание OOMKill-ов, замедления и т.п.)
 
 ### <a name="general_assignment_review">Как проверять проект</a>
+
+TODO
 
 - Чтобы просто проверить исполнение - смотрим код в файлах и исполняемся по инструкциям в разделе **"Быстрая проверка"**,
 - чтобы проверить ход выполнения проекта - читаем следующие за ним разделы.
 
+
 ## <a name="fast_assignment_review">Быстрая проверка</a>
 
-...
+TODO
 
 ```
 sudo docker compose --env-file .env.example up -d --build
 
 192.168.100.225 === localhost
-
-как просматривать в kafka UI
 ```
-
-...
 
 ## <a name="dev_proc_iteration_1">Разработка: Итерация 1: Два Kafka-кластера в репликации ведущий-ведомый. Mirror Maker.</a>
 
@@ -835,7 +862,7 @@ Python-приложение должно читать сообщения из т
 }
 ```
 
-Почему в `etc-kafka-secrets`? Потому что схему надо залить в Schema Registry, делать это мы поручим сервису `schemas-registrator`, а эту директорию мы прокидываем во все наши контейнеры volume-ом, соотв. удобно в неё и ещё что-то размещать нужное (по-хорошему позже надо сделать отдельные директории и volume-ы (TODO)).
+Почему в `etc-kafka-secrets`? Потому что схему надо залить в Schema Registry, делать это мы поручим сервису `schemas-registrator`, а эту директорию мы прокидываем во все наши контейнеры volume-ом, соотв. удобно в неё и ещё что-то размещать нужное (по-хорошему позже надо сделать отдельные директории и volume-ы).
 
 Сервис (`topic-creation`) у нас уже используется для создания топиков и для раздачи ACL-правил, а сервис `schemas-registrator` зарегистрирует схему на два топика.
 
@@ -955,7 +982,7 @@ sudo docker logs schema-registry
 ...
 [2026-03-27 12:49:48,046] INFO 172.19.0.9 - - [27/Mar/2026:12:49:48 +0000] "POST /subjects/goods-prohibited-value/versions HTTP/2.0" 200 8 "-" "curl/7.61.1" 11 (io.confluent.rest-utils.requests)
 
-# kafka connect TODO: создать ещё контейнер, чтобы конфиг коннекту регил
+# kafka connect: создать бы ещё контейнер, чтобы конфиг коннекту регил (реализовано ниже по итерациям)
 curl -sX POST -H 'Content-Type: application/json' --data @./etc-kafka-secrets/kafka-connect_shop_api.conf.json http://localhost:8073/connectors | jq
 ...
 
@@ -1889,6 +1916,136 @@ shop=# exit
 
 ## <a name="dev_proc_iteration_4">Разработка: Итерация 4: Apache Spark. KSQLDB. Рекомендации.</a>
 
+### <a name="dev_proc_iteration_4_nodes">Узлы (сервисы в компоузере)</a>
+
+На этой итерации мы добавили несколько сервисов в `compose`:
+
+- `spark-master`, `spark-worker`, `spark-recommendations-job`
+- `ksqldb-server`, `ksqldb-bootstrap`, `ksqldb-cli`
+
+Соответственно перестроили зависимости; в `kafka-ui` для второго Kafka-кластера (`mart`) добавили связку с `ksqldb-server`.
+
+```
+--services
+
+postgres
+
+stage-controller-1
+stage-controller-2
+stage-controller-3
+
+stage-broker-1
+stage-broker-2
+stage-broker-3
+
+mart-controller-1
+mart-controller-2
+mart-controller-3
+
+mart-broker-1
+mart-broker-2
+mart-broker-3
+
+mirror-maker
+schema-registry
+kafka-connect
+kafka-ui
+
+spark-master
+spark-worker
+spark-recommendations-job
+
+ksqldb-server
+ksqldb-cli
+
+topic-creation
+schemas-registrator
+connectors-registrator
+ksqldb-bootstrap
+
+shop-api-app
+
+
+--networks
+
+ya-kafka-pf-stage
+ya-kafka-pf-mart
+```
+
+### <a name="dev_proc_iteration_4_files">Файлы 4-й итерации (для наглядности версионирования по фазам процесса разработки)</a>
+
+```bash
+tree -a phase4
+
+phase4
+├── ca.cnf
+├── compose.yaml
+├── .env.example
+├── etc-kafka-secrets
+│   ├── client_api_search.avsc
+│   ├── client_recommendations_key.avsc
+│   ├── client_recommendations_value.avsc
+│   ├── kafka-connect_shop_api.conf.json
+│   ├── kafka.keystore.pkcs12
+│   ├── kafka.truststore.jks
+│   ├── ksqldb-bootstrap.sh
+│   ├── product.avsc
+│   ├── setup-acls-mart.sh
+│   ├── setup-acls-stage.sh
+│   └── setup-schemas.sh
+├── kafka.cnf.template
+├── kafka-connect
+│   ├── Dockerfile
+│   └── plugins
+│       └── kafka-connect-spooldir
+│           ├── ...
+│           ├── kafka-connect-spooldir-2.0.71.jar
+│           ├── ...
+├── make-certs.sh
+├── postgres
+│   ├── custom-config.conf
+│   └── init-scripts
+│       └── create_tables.sql
+├── shop-api-app
+│   ├── app
+│   │   ├── requirements.txt
+│   │   └── shop_api
+│   │       ├── agents.py
+│   │       ├── app.py
+│   │       ├── commands.py
+│   │       ├── goods_filtered_sink.py
+│   │       ├── __init__.py
+│   │       ├── __main__.py
+│   │       ├── models.py
+│   │       ├── pages.py
+│   │       ├── tables.py
+│   │       └── topics.py
+│   ├── Dockerfile
+│   └── supervisord.conf
+├── shop_api_fixtures
+│   ├── boo.json
+│   ├── moo.json
+│   ├── store_001_1.json
+│   ├── store_001_2.json
+│   ├── store_001_3.json
+│   └── store_001_4.json
+└── spark
+    ├── Dockerfile
+    ├── entrypoint.sh
+    └── recommendations_job.py
+
+```
+
+### <a name="dev_proc_iteration_4_checks">Что проверяем после итерации</a>
+
+- разворачиваем compose-проект
+- вводим через cli api стоп-слово "глуп" на названия товаров
+- копируем файлы из директории фикстур в директорию стейджа пайплайна
+- по желанию смотрим топики в ui для обоих кластеров
+- делаем пару поисковых запросов по http api на разные слова от разных пользоватедлей
+- по желанию смотрим топики в ui для обоих кластеров, в postgres, в ksqldb в cli api или в kafka ui, можно посмотреть spark job в ui
+- запрашиваем рекомендации для разных пользователей по http api
+
 ### <a name="dev_proc_iteration_4_1">4.1. Внедряем Apache Spark в проект + простейший job про рекомендации</a>
 
 #### Описание
@@ -1936,19 +2093,12 @@ sudo docker logs ...
 Закинем глупые устройства в запрещённые товары через задание "глуп" в стоп-слова:
 
 ```bash
-...$ sudo docker exec -it shop-api-app bash
-
-...# faust -A shop_api.app block-word --word глуп --block True
+...$ sudo docker exec shop-api-app faust -A shop_api.app block-word --word глуп --block True
 sending BlockWordMessage
 sent: word='глуп' block=True
-
-...# faust -A shop_api.app list-block-words
-{'глуп': True}
-...# exit
-exit
 ```
 
-Запустим в дата-пайплыйн все наши файлы-фикстуры от магазинов:
+Запустим в дата-пайплайн все наши файлы-фикстуры от магазинов:
 
 ```bash
 ...$ cp ./shop_api_fixtures/* ./kafka-connect/data/shop_api_stage
@@ -1957,14 +2107,10 @@ exit
 Поищем товары с названиями, содержащими "глуп" и "умн" от пользователей 11 и 222
 
 ```bash
-...$ curl -s http://localhost:6077/search-good-by-name/11/%D1%83%D0%BC%D0%BD
-...
-...$ curl -s http://localhost:6077/search-good-by-name/11/%D0%B3%D0%BB%D1%83%D0%BF
-...
-...$ curl -s http://localhost:6077/search-good-by-name/22/%D1%83%D0%BC%D0%BD
-...
-...$ curl -s http://localhost:6077/search-good-by-name/22/%D0%B3%D0%BB%D1%83%D0%BF
-...
+...$ curl -s http://localhost:6077/search-good-by-name/11/%D1%83%D0%BC%D0%BD && \
+curl -s http://localhost:6077/search-good-by-name/11/%D0%B3%D0%BB%D1%83%D0%BF && \
+curl -s http://localhost:6077/search-good-by-name/22/%D1%83%D0%BC%D0%BD && \
+curl -s http://localhost:6077/search-good-by-name/22/%D0%B3%D0%BB%D1%83%D0%BF
 ```
 
 
@@ -1979,6 +2125,305 @@ exit
 
 ### <a name="dev_proc_iteration_4_2">4.2. Внедряем в проект KSQLDB + операция получения рекомендаций в Faust-приложении</a>
 
+#### <a name="dev_proc_iteration_4_2_1">4.2.1. Общее описание</a>
+
+Вводим в compose-проект сервисы `ksqldb-server` и `ksqldb-cli`, сервис `kafka-ui` ставим в зависимость от `ksqldb-server` и mart-кластеру в `kafka-ui` прописываем путь к ksqldb-серверу (`KAFKA_CLUSTERS_1_KSQLDBSERVER`).
+
+И мы получаем ksql db интерфейс в mart-кластере кафка юи (`http://192.168.100.225:8070/ui/clusters/mart/ksqldb/tables`).
+
+Тут как обычно у нас: 100500 настроек переменными для SSL и т.п. - см. `./compose.yaml`.
+
+И 100500 ACL - см. `./etc-kafka-secrets/setup-acls-mart.sh`.
+
+Сначала развернёмся и заполним всё, что надо, данными
+
+```bash
+sudo docker compose --env-file .env.example up -d --build
+sudo docker ps -a
+sudo docker logs ...
+```
+
+```bash
+sudo docker exec shop-api-app faust -A shop_api.app block-word --word глуп --block True
+
+cp ./shop_api_fixtures/* ./kafka-connect/data/shop_api_stage
+
+# выполним это неспешно несколько раз, с перерывами в пару секунд
+curl -s http://localhost:6077/search-good-by-name/11/%D1%83%D0%BC%D0%BD && \
+curl -s http://localhost:6077/search-good-by-name/11/%D0%B3%D0%BB%D1%83%D0%BF && \
+curl -s http://localhost:6077/search-good-by-name/22/%D1%83%D0%BC%D0%BD && \
+curl -s http://localhost:6077/search-good-by-name/22/%D0%B3%D0%BB%D1%83%D0%BF && \
+curl -s http://localhost:6077/search-good-by-name/33/boo && \
+curl -s http://localhost:6077/search-good-by-name/33/moo && \
+curl -s http://localhost:6077/search-good-by-name/22/zoo && \
+curl -s http://localhost:6077/search-good-by-name/22/woo
+```
+
+#### <a name="dev_proc_iteration_4_2_2">4.2.2. Поработаем с ksql db через веб-интерфейс kafka-ui</a>
+
+**NB**: `K STRUCT<client INT> KEY` и `GROUP BY K->client`
+
+`http://192.168.100.225:8070/ui/clusters/mart/ksqldb/tables`, там кнопка `Execute KSQL Request`.
+
+```sql
+DROP TABLE IF EXISTS client_recommendations_latest;
+
+DROP STREAM IF EXISTS client_recommendations_s;
+
+CREATE STREAM client_recommendations_s (
+  K STRUCT<client INT> KEY,
+  generated_at STRING,
+  top_words ARRAY<STRUCT<word STRING, count BIGINT>>
+) WITH (
+  KAFKA_TOPIC='client-recommendations',
+  KEY_FORMAT='AVRO',
+  VALUE_FORMAT='AVRO'
+);
+
+CREATE TABLE client_recommendations_latest AS
+  SELECT
+    K->client AS client,
+    LATEST_BY_OFFSET(generated_at) AS generated_at,
+    LATEST_BY_OFFSET(top_words) AS top_words
+  FROM client_recommendations_s
+  GROUP BY K->client
+  EMIT CHANGES;
+
+SELECT * FROM client_recommendations_latest EMIT CHANGES;
+```
+
+#### <a name="dev_proc_iteration_4_2_3">4.2.3. Или через cli-консоль</a>
+
+**NB**: `K STRUCT<client INT> KEY` и `GROUP BY K->client`
+
+```bash
+...$ sudo docker exec -it ksqldb-cli bash
+[appuser@ksqldb-cli ~]$ ksql http://ksqldb-server:8088
+...
+
+ksql> DROP TABLE IF EXISTS client_recommendations_latest;
+
+ Message                                                
+--------------------------------------------------------
+ Source `CLIENT_RECOMMENDATIONS_LATEST` does not exist. 
+--------------------------------------------------------
+ksql> 
+
+ksql> DROP STREAM IF EXISTS client_recommendations_s;
+
+ Message                                           
+---------------------------------------------------
+ Source `CLIENT_RECOMMENDATIONS_S` does not exist. 
+---------------------------------------------------
+ksql> 
+
+ksql> CREATE STREAM client_recommendations_s (
+>  K STRUCT<client INT> KEY,
+>  generated_at STRING,
+>  top_words ARRAY<STRUCT<word STRING, count BIGINT>>
+>) WITH (
+>  KAFKA_TOPIC='client-recommendations',
+>  KEY_FORMAT='AVRO',
+>  VALUE_FORMAT='AVRO'
+>);
+
+ Message        
+----------------
+ Stream created 
+----------------
+ksql>
+
+ksql> CREATE TABLE client_recommendations_latest AS
+>  SELECT
+>    K->client AS client,
+>    LATEST_BY_OFFSET(generated_at) AS generated_at,
+>    LATEST_BY_OFFSET(top_words) AS top_words
+>  FROM client_recommendations_s
+>  GROUP BY K->client
+>  EMIT CHANGES;
+
+ Message                                                     
+-------------------------------------------------------------
+ Created query with ID CTAS_CLIENT_RECOMMENDATIONS_LATEST_13 
+-------------------------------------------------------------
+ksql> 
+
+ksql> SELECT * FROM client_recommendations_latest EMIT CHANGES;
++------------------------------------------+------------------------------------------+------------------------------------------+
+|CLIENT                                    |GENERATED_AT                              |TOP_WORDS                                 |
++------------------------------------------+------------------------------------------+------------------------------------------+
+|33                                        |2026-04-03T01:03:51.204923+00:00          |[{WORD=boo, COUNT=3}, {WORD=moo, COUNT=3}]|
+|22                                        |2026-04-03T01:03:51.204923+00:00          |[{WORD=умн, COUNT=3}, {WORD=глуп, COUNT=3}|
+|                                          |                                          |, {WORD=boo, COUNT=2}, {WORD=moo, COUNT=2}|
+|                                          |                                          |, {WORD=zoo, COUNT=1}]                    |
+|11                                        |2026-04-03T01:03:51.204923+00:00          |[{WORD=умн, COUNT=3}, {WORD=глуп, COUNT=3}|
+|                                          |                                          |]                                         |
+|11                                        |2026-04-03T01:15:01.227059+00:00          |[{WORD=умн, COUNT=8}, {WORD=глуп, COUNT=8}|
+|                                          |                                          |]                                         |
+|22                                        |2026-04-03T01:15:01.227059+00:00          |[{WORD=умн, COUNT=8}, {WORD=глуп, COUNT=8}|
+|                                          |                                          |, {WORD=zoo, COUNT=6}, {WORD=woo, COUNT=6}|
+|                                          |                                          |, {WORD=boo, COUNT=2}]                    |
+|33                                        |2026-04-03T01:15:01.227059+00:00          |[{WORD=boo, COUNT=8}, {WORD=moo, COUNT=8}]|
+
+Press CTRL-C to interrupt
+```
+
+**В итоге руками CTAS-таблица в ksqlDB создаётся, работает.**
+
+#### <a name="dev_proc_iteration_4_2_4">4.2.4. Внедряем автосоздание этой таблицы в процесс развёртывания compose-проекта</a>
+
+Добавляем сервис `ksqldb-bootstrap`, который отрабатывает sql для создания таблицы через исполнение bash-скрипта `etc-kafka-secrets/ksqldb-bootstrap.sh` и прекращает работу.
+
+Прописываем на него зависимости типа `condition: service_completed_successfully`.
+
+Запускаем
+
+```bash
+sudo docker compose --env-file .env.example up -d --build
+sudo docker ps -a
+sudo docker logs ...
+```
+
+Видим ksqlDB стрим и таблицу в Kafka UI
+
+`http://192.168.100.225:8070/ui/clusters/mart/ksqldb/tables`
+
+Прогоняем данные по пайплайну
+
+```bash
+sudo docker exec shop-api-app faust -A shop_api.app block-word --word глуп --block True
+
+cp ./shop_api_fixtures/* ./kafka-connect/data/shop_api_stage
+
+# выполним это неспешно несколько раз, с перерывами в пару секунд
+curl -s http://localhost:6077/search-good-by-name/11/%D1%83%D0%BC%D0%BD && \
+curl -s http://localhost:6077/search-good-by-name/11/%D0%B3%D0%BB%D1%83%D0%BF && \
+curl -s http://localhost:6077/search-good-by-name/22/%D1%83%D0%BC%D0%BD && \
+curl -s http://localhost:6077/search-good-by-name/22/%D0%B3%D0%BB%D1%83%D0%BF && \
+curl -s http://localhost:6077/search-good-by-name/33/boo && \
+curl -s http://localhost:6077/search-good-by-name/33/moo && \
+curl -s http://localhost:6077/search-good-by-name/22/zoo && \
+curl -s http://localhost:6077/search-good-by-name/22/woo
+```
+
+Читаем CTAS-Таблицу в ksqlDB
+
+```bash
+...$ sudo docker exec -it ksqldb-cli bash
+[appuser@ksqldb-cli ~]$ ksql http://ksqldb-server:8088
+
+ksql> SELECT * FROM client_recommendations_latest EMIT CHANGES;
++------------------------------------------+------------------------------------------+------------------------------------------+
+|CLIENT                                    |GENERATED_AT                              |TOP_WORDS                                 |
++------------------------------------------+------------------------------------------+------------------------------------------+
+|11                                        |2026-04-03T01:48:01.229206+00:00          |[{WORD=умн, COUNT=2}, {WORD=глуп, COUNT=2}|
+|                                          |                                          |]                                         |
+|22                                        |2026-04-03T01:48:01.229206+00:00          |[{WORD=умн, COUNT=2}, {WORD=глуп, COUNT=2}|
+|                                          |                                          |, {WORD=zoo, COUNT=2}, {WORD=woo, COUNT=2}|
+|                                          |                                          |]                                         |
+|33                                        |2026-04-03T01:48:01.229206+00:00          |[{WORD=boo, COUNT=2}, {WORD=moo, COUNT=2}]|
+
+Press CTRL-C to interrupt
+
+^CQuery terminated
+ksql> exit
+Exiting ksqlDB.
+[appuser@ksqldb-cli ~]$ exit
+exit
+
+```
+
+#### <a name="dev_proc_iteration_4_2_5">4.2.5. Http-операция получения рекомендаций (Faust-приложение)</a>
+
+Endpoint - `/get-recommendations/{client}`. Читает запись из ksqlDB-таблицы CLIENT_RECOMMENDATIONS_LATEST, возвращает json.
+
+Запускаем проект
+
+```bash
+sudo docker compose --env-file .env.example up -d --build
+sudo docker ps -a
+sudo docker logs ...
+```
+
+Прогоняем данные по пайплайну
+
+```bash
+sudo docker exec shop-api-app faust -A shop_api.app block-word --word глуп --block True
+
+cp ./shop_api_fixtures/* ./kafka-connect/data/shop_api_stage
+
+# выполним это неспешно несколько раз, с перерывами в пару секунд
+curl -s http://localhost:6077/search-good-by-name/11/%D1%83%D0%BC%D0%BD && \
+curl -s http://localhost:6077/search-good-by-name/11/%D0%B3%D0%BB%D1%83%D0%BF && \
+curl -s http://localhost:6077/search-good-by-name/22/%D1%83%D0%BC%D0%BD && \
+curl -s http://localhost:6077/search-good-by-name/22/%D0%B3%D0%BB%D1%83%D0%BF && \
+curl -s http://localhost:6077/search-good-by-name/33/boo && \
+curl -s http://localhost:6077/search-good-by-name/33/moo && \
+curl -s http://localhost:6077/search-good-by-name/22/zoo && \
+curl -s http://localhost:6077/search-good-by-name/22/woo
+```
+
+Делаем http-запросы к операции `get-recommendations`.
+
+```bash
+...$ curl -s http://localhost:6077/get-recommendations/11 | jq
+{
+  "client": 11,
+  "generated_at": "2026-04-03T07:34:31.221327+00:00",
+  "top_words": [
+    {
+      "WORD": "умн",
+      "COUNT": 3
+    },
+    {
+      "WORD": "глуп",
+      "COUNT": 3
+    }
+  ]
+}
+
+...$ curl -s http://localhost:6077/get-recommendations/22 | jq
+{
+  "client": 22,
+  "generated_at": "2026-04-03T07:34:31.221327+00:00",
+  "top_words": [
+    {
+      "WORD": "умн",
+      "COUNT": 3
+    },
+    {
+      "WORD": "глуп",
+      "COUNT": 3
+    },
+    {
+      "WORD": "zoo",
+      "COUNT": 3
+    },
+    {
+      "WORD": "woo",
+      "COUNT": 3
+    }
+  ]
+}
+
+...$ curl -s http://localhost:6077/get-recommendations/777 | jq
+{
+  "error": "no recommendations for this client"
+}
+
+```
+
+**УРА**
+
+Всё работает как задумано.
+
+### <a name="dev_proc_iteration_4_next_iteration_planning">План на Итерацию 5</a>
+
+- настроить мониторинг Kafka (Prometheus + Grafana)
+- причесать python линтером
+- добить все TODO в этом README, в т.ч. нарисовать сему сервисов по факту, адреса ui для sopark-а кажется забыл указать, и т.п.
+
+
+## <a name="dev_proc_iteration_5">Разработка: Итерация 5: Мониторинг: Prometheus, Grafana</a>
+
 TODO
-
-
