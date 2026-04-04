@@ -1,16 +1,17 @@
-from datetime import datetime, timezone
-from typing import Optional
 import asyncio
 import os
 import warnings
+from datetime import datetime, timezone
+from typing import Optional
 
 import requests
+
 warnings.simplefilter("ignore", UserWarning)
 
 from faust.cli import option
 
-from .app import app
 from .agents import persist_block_words
+from .app import app
 from .models import BlockWordMessage
 
 
@@ -20,13 +21,15 @@ async def list_block_words(self):
 
     Читаем снимок через HTTP того же приложения (см. pages.get_block_words).
     """
-    # тут ситуация такая: когда мы запускаем  faust -A shop_api.app list_block_words
-    # поднимается другой процесс Python, чем "долгоиграющий" процесс, в котором живёт
-    # агент persist_block_words.
+    # тут ситуация такая: когда мы запускаем
+    # faust -A shop_api.app list_block_words
+    # поднимается другой процесс Python, чем "долгоиграющий" процесс,
+    # в котором живёт агент persist_block_words.
     # commands и persist_block_words делят код,
     # но не делят один и тот же живой экземпляр таблицы — это разные процессы
     # и разные локальные хранилища (rocksdb).
-    # Веб Faust — HTTP, не HTTPS. Connection refused = на порту нет слушателя (воркер/веб выключен или другой порт).
+    # Веб Faust — HTTP, не HTTPS. Connection refused = на порту нет слушателя
+    # (воркер/веб выключен или другой порт).
     _web_port = os.getenv('SHOP_API_WEB_PORT', '6077')
     _explicit = os.getenv('SHOP_API_WEB_BASE', '').strip().rstrip('/')
     if _explicit:
@@ -50,7 +53,8 @@ async def list_block_words(self):
                 print(f"ошибка API: {data}")
                 return None
             if not data:
-                print('(пусто: воркер не видит записей в таблице или ещё не обработал топик)')
+                print('(пусто: воркер не видит записей в таблице '
+                      'или ещё не обработал топик)')
                 return None
             for row in data:
                 print(row)
@@ -65,10 +69,10 @@ async def list_block_words(self):
     except Exception:
         _datadir = None
     print(
-        'Проверьте: faust-worker в supervisord не в crash-loop (stderr: ConsistencyError по *-changelog '
-        'значит рассинхрон RocksDB и Kafka: остановите воркер, удалите datadir и перезапустите). '
-        f'Каталог данных: {_datadir or "APP_DATADIR / faust worker --datadir (по умолчанию <cwd>/<id>-data)"}. '
-        'Порт: worker -p и SHOP_API_WEB_PORT; при необходимости SHOP_API_WEB_BASE=http://127.0.0.1:6077'
+        'Проверьте: faust-worker в supervisord не в crash-loop'
+        '(stderr: ConsistencyError по *-changelog '
+        'значит рассинхрон RocksDB и Kafka: остановите воркер,'
+        'удалите datadir и перезапустите).'
     )
     return None
 
@@ -86,7 +90,8 @@ async def block_word(self, word: str, block: bool = True):
 
     ask() требует ответ в f-reply и держит ReplyConsumer до ответа агента;
     параллельно с долгоживущим worker в той же consumer group это часто
-    зависает. send() — обычная запись в топик агента, обработает основной worker.
+    зависает. send() — обычная запись в топик агента,
+    обработает основной worker.
     """
 
     message: BlockWordMessage = BlockWordMessage(

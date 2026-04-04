@@ -1,25 +1,24 @@
+import io
+import json
+import struct
 import warnings
 
-warnings.simplefilter("ignore", UserWarning)
+warnings.simplefilter("ignore", UserWarning)  # isort:skip
 
-import io, json, struct
 
-from fastavro import validate, parse_schema, schemaless_writer
-import requests
-from faust import StreamT
 from typing import AsyncIterable
 
-from .app import app, SSL_CONFIG, SCHEMA_REGISTRY_URL
-from .models import BlockWordMessage
-from .goods_filtered_sink import GoodsFilteredBatchSink
-from .tables import block_words_table
-from .topics import (
-    blocked_words_topic, dlq_topic,
-    filtered_schema_val_name, filtered_topic_name,
-    prohibited_schema_val_name, prohibited_topic_name,
-    raw_topic
-)
+import requests
+from fastavro import parse_schema, schemaless_writer, validate
+from faust import StreamT
 
+from .app import SCHEMA_REGISTRY_URL, SSL_CONFIG, app
+from .goods_filtered_sink import GoodsFilteredBatchSink
+from .models import BlockWordMessage
+from .tables import block_words_table
+from .topics import (blocked_words_topic, dlq_topic, filtered_schema_val_name,
+                     filtered_topic_name, prohibited_schema_val_name,
+                     prohibited_topic_name, raw_topic)
 
 # Faust требует, чтобы у сериализатора были методы dumps/loads
 class AvroSerializer:
@@ -41,7 +40,7 @@ class AvroSerializer:
         return out.getvalue()
 
     def loads(self, value):
-        # Нам не надо десериализовывать Avro в этом случае, 
+        # Нам не надо десериализовывать Avro в этом случае,
         # но Faust может вызвать этот метод.
         return value
 
@@ -63,7 +62,8 @@ def _schema_registry_get_latest(subject: str) -> tuple[dict, int]:
 
 def _has_stop_words_in_name(name: str) -> tuple[bool, list[str]]:
     """
-    Проверяем, что name содержит (подстрокой, case-insensitive) любое стоп-слово.
+    Проверяем, что name содержит (подстрокой, case-insensitive)
+    любое стоп-слово.
     Возвращаем (есть_ли, список_совпавших_слов_как_в_таблице).
     """
     if not isinstance(name, str) or not name:
@@ -89,13 +89,15 @@ async def validator_agent(stream):
         filtered_schema_dict, filtered_schema_id = _schema_registry_get_latest(
             filtered_schema_val_name
         )
-        prohibited_schema_dict, prohibited_schema_id = _schema_registry_get_latest(
-            prohibited_schema_val_name
+        prohibited_schema_dict, prohibited_schema_id = (
+            _schema_registry_get_latest(
+                prohibited_schema_val_name
+            )
         )
 
         filtered_parsed_schema = parse_schema(filtered_schema_dict)
         prohibited_parsed_schema = parse_schema(prohibited_schema_dict)
-        
+
         # Создаём сериализатор для валидных данных
         filtered_avro_encode = AvroSerializer(
             filtered_schema_dict, filtered_schema_id
@@ -103,7 +105,7 @@ async def validator_agent(stream):
         prohibited_avro_encode = AvroSerializer(
             prohibited_schema_dict, prohibited_schema_id
         )
-        
+
         # Топик для валидных даных с кастомным сериализатором
         filtered_topic = app.topic(
             filtered_topic_name,
@@ -113,12 +115,14 @@ async def validator_agent(stream):
             prohibited_topic_name,
             value_serializer=prohibited_avro_encode
         )
-        
+
         app.logger.info(
-            f"Схема '{filtered_schema_val_name}' (ID: {filtered_schema_id}) загружена"
+            f"Схема '{filtered_schema_val_name}' "
+            f"(ID: {filtered_schema_id}) загружена"
         )
         app.logger.info(
-            f"Схема '{prohibited_schema_val_name}' (ID: {prohibited_schema_id}) загружена"
+            f"Схема '{prohibited_schema_val_name}' "
+            f"(ID: {prohibited_schema_id}) загружена"
         )
     except Exception as e:
         app.logger.critical(f"Невозможно загрузить схему: {e}")
@@ -133,10 +137,17 @@ async def validator_agent(stream):
                 data = json.loads(msg_bytes)
 
                 # 2. Валидация по Avro-схеме filtered (fastavro)
-                if not validate(data, filtered_parsed_schema, raise_errors=False):
+                if not validate(
+                        data,
+                        filtered_parsed_schema,
+                        raise_errors=False
+                ):
                     app.logger.warning(f"SCHEMA MISMATCH (filtered): {data}")
                     await dlq_topic.send(
-                        value={"reason": "schema_mismatch_filtered", "payload": data}
+                        value={
+                            "reason": "schema_mismatch_filtered",
+                            "payload": data
+                        }
                     )
                     continue
 
@@ -146,9 +157,15 @@ async def validator_agent(stream):
                 )
 
                 if has_stop_words:
-                    # Топик goods-prohibited тоже связан со схемой: валидируем отдельно
-                    if not validate(data, prohibited_parsed_schema, raise_errors=False):
-                        app.logger.warning(f"SCHEMA MISMATCH (prohibited): {data}")
+                    # Топик goods-prohibited тоже связан со схемой:
+                    # валидируем отдельно
+                    if not validate(
+                            data,
+                            prohibited_parsed_schema,
+                            raise_errors=False
+                    ):
+                        app.logger.warning(
+                            f"SCHEMA MISMATCH (prohibited): {data}")
                         await dlq_topic.send(
                             value={
                                 "reason": "schema_mismatch_prohibited",
@@ -160,14 +177,16 @@ async def validator_agent(stream):
 
                     await prohibited_topic.send(value=data)
                     app.logger.info(
-                        f"SENT TO PROHIBITED: {data.get('product_id', 'unknown')} "
+                        f"SENT TO PROHIBITED: "
+                        f"{data.get('product_id', 'unknown')} "
                         f"(matched_words={matched_words})"
                     )
                 else:
                     await filtered_topic.send(value=data)
                     await pg_sink.enqueue_filtered_product(data)
                     app.logger.info(
-                        f"SENT TO FILTERED: {data.get('product_id', 'unknown')}"
+                        f"SENT TO FILTERED: "
+                        f"{data.get('product_id', 'unknown')}"
                     )
 
             except json.JSONDecodeError:
@@ -181,6 +200,7 @@ async def validator_agent(stream):
                 app.logger.error(f"AGENT ERROR: {e}")
     finally:
         await pg_sink.stop()
+
 
 @app.agent(
     blocked_words_topic

@@ -1,5 +1,6 @@
 from datetime import datetime
 import warnings
+
 warnings.simplefilter("ignore", UserWarning)
 
 import faust

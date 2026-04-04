@@ -107,6 +107,8 @@
 
 ![ya_kafka_project_final](./ya_kafka_project_final.drawio.png)
 
+TODO: картинка в работе
+
 ## <a name="general_descr_init_layer">Инициализационный слой структуры проекта по сервисам</a>
 
 Этот слой необходим для настройки основных сервисов (обеспечивающих автоматизацию стримового дата-пайплайна) инициализационными скриптами или служебными сервисами.
@@ -283,19 +285,29 @@ sudo docker exec shop-api-app faust -A shop_api.app block-word --word глуп -
 
 Топик, кроме вышеописанных кейсов администрирования, используется только в агенте загрузки и фильтрации товаров (`validator_agent`) в том же Faust-приложении в сервисе `shop-api-app` (именно для фильтрации товаров по этим словам в названии товара).
 
-*TODO: Посмотреть, удаляются ли Фаустом сообщения из топика, в смысле помеяаются например как "`null` (`tombstone`)" и что там вообще под капотом кроме rocksdb, и вообще маппит ли он таблицу на топик, или только наоборот, и если маппит, то как попросить его нулл-ы отправлять и т.п.*
+TODO: Намутить так, чтобы при передачи False было удвление записи из таблицы, из топика... Ну то есть не удаление, а пометка к удалению `null` (`tombstone`). Посмотреть, что с этим у Фауста, если ничего - своим кодом отмечать, настроив, кстати, топик соотв. образом.
 
 ### Загрузка и фильтрация товаров
+
+TODO
+
 ### Поиск товаров по названию
+
+TODO
+
 ### Формирование рекомендаций
+
+TODO
+
 ### Получение рекомендаций
 
-
-
+TODO
 
 ## <a name="general_descr_services_depends_on">Зависимости сервисов</a>
 
 TODO
+
+Устаревшее:
 
 - Сначала надо развернуть два кафка-кластера
 - Затем надо запустить сервис, который создаст необходимые топики, в частности служебные для разных сервисов, и выставит ACL-ы (завершается после выполнения задания) (завершается после выполнения задания) (завершается после выполнения задания). Это позволит нам сузить права некоторым сервисам, не давая им слишком много прав для создания ими служебных тоиков и т.п.
@@ -335,11 +347,351 @@ NB: рекомендую разворачивать проект с аргуме
 
 Далее можно заливать товары, управлять списком стоп-слов, искать, смотреть, как меняются рекомендации, смотреть в веб-интерфейсах состояния подсистем, топики, рсубд, мониторинг, чтобы убедиться, что всё работает как задумано и описано.
 
-```
-sudo docker compose --env-file .env.example up -d --build
+Запускаем проект (это займёт несколько минут)
 
-192.168.100.225 === localhost
+```bash
+sudo docker compose --env-file .env.example up -d --build
+sudo docker ps -a
+sudo docker logs ...
 ```
+
+Прогоняем данные по пайплайну
+
+```bash
+# вносим одно слово в список запрещённых
+# (можно больше, но у меня в фикстурах есть умные и глупые часы и т.п.)
+...$ sudo docker exec shop-api-app faust -A shop_api.app block-word --word глуп --block True
+
+sending BlockWordMessage
+sent: word='глуп' block=True
+
+...$ sudo docker exec shop-api-app faust -A shop_api.app block-word --word бирюз --block True
+
+sending BlockWordMessage
+sent: word='бирюз' block=True
+
+...$ sudo docker exec shop-api-app faust -A shop_api.app list-block-words
+
+{'бирюз': True}
+{'глуп': True}
+
+# заливаем все фикстуры товаров в директорию,
+# из которйо их подхватит Kafka Connect
+...$ cp ./shop_api_fixtures/* ./kafka-connect/data/shop_api_stage
+
+# выполним это неспешно несколько раз, с перерывами в пару секунд.
+# Это поисковые запросы, чтобы накатиласт какая-то статистика.
+# Можно до кучи выполнить по отдельности через "| jq",
+# чтобы посмотреть результат поиска наглядно
+...$ curl -s http://localhost:6077/search-good-by-name/11/%D1%83%D0%BC%D0%BD && \
+curl -s http://localhost:6077/search-good-by-name/11/%D0%B3%D0%BB%D1%83%D0%BF && \
+curl -s http://localhost:6077/search-good-by-name/22/%D1%83%D0%BC%D0%BD && \
+curl -s http://localhost:6077/search-good-by-name/22/%D0%B3%D0%BB%D1%83%D0%BF && \
+curl -s http://localhost:6077/search-good-by-name/33/boo && \
+curl -s http://localhost:6077/search-good-by-name/33/moo && \
+curl -s http://localhost:6077/search-good-by-name/22/zoo && \
+curl -s http://localhost:6077/search-good-by-name/22/woo
+
+...
+
+...$ curl -s http://localhost:6077/search-good-by-name/22/%D1%83%D0%BC%D0%BD | jq
+[
+  {
+    "product_id": "111",
+    "product_name": "Умная колонка МММ"
+  },
+  {
+    "product_id": "777",
+    "product_name": "Умные часы ABC"
+  },
+  {
+    "product_id": "12345",
+    "product_name": "Умные часы XYZ"
+  }
+]
+
+
+...$ curl -s http://localhost:6077/search-good-by-name/11/%D0%B3%D0%BB%D1%83%D0%BF | jq
+[]
+
+...$ curl -s http://localhost:6077/search-good-by-name/11/умн | jq
+[
+  {
+    "product_id": "111",
+    "product_name": "Умная колонка МММ"
+  },
+  {
+    "product_id": "777",
+    "product_name": "Умные часы ABC"
+  },
+  {
+    "product_id": "12345",
+    "product_name": "Умные часы XYZ"
+  }
+]
+
+...$ curl -s http://localhost:6077/search-good-by-name/11/глуп | jq
+[]
+
+```
+
+Всё, пайплайн отработал, рекомендации по идее созданы (создаются постоянно Спарк-ом по факту поступления статы по поиску).
+
+Проверяем рекомендации:
+
+Делаем http-запросы к операции `get-recommendations`.
+
+```bash
+...$ curl -s http://localhost:6077/get-recommendations/11 | jq
+{
+  "client": 11,
+  "generated_at": "2026-04-04T18:05:51.188372+00:00",
+  "top_words": [
+    {
+      "WORD": "глуп",
+      "COUNT": 5
+    },
+    {
+      "WORD": "умн",
+      "COUNT": 4
+    }
+  ]
+}
+
+...$ curl -s http://localhost:6077/get-recommendations/22 | jq
+{
+  "client": 22,
+  "generated_at": "2026-04-04T18:04:31.226027+00:00",
+  "top_words": [
+    {
+      "WORD": "умн",
+      "COUNT": 4
+    },
+    {
+      "WORD": "глуп",
+      "COUNT": 3
+    },
+    {
+      "WORD": "zoo",
+      "COUNT": 3
+    },
+    {
+      "WORD": "woo",
+      "COUNT": 3
+    }
+  ]
+}
+
+...$ curl -s http://localhost:6077/get-recommendations/777 | jq
+{
+  "error": "no recommendations for this client"
+}
+
+```
+
+**Всё работает.**
+
+Теперь можно **посмотреть поподробнее на внутренности** хранилищ, **потом на мониторинг**.
+
+**Фильтрация:**
+
+То, что глупые товары не ищутся поиском, мы уже видели чуть выше, когда набивали поиском стату для рекомендаций.
+
+Можно посмотреть в Kafka UI что у нас в топиках, так же в постгресе.
+
+**Посмотрим на stage-кластер.**
+
+```
+http://localhost:8070/ui/clusters/stage/all-topics?perPage=25
+```
+
+| Topic Name | Number of messages |
+|------------|--------------------|
+| client-api-search | 28 |
+| goods-dlq | 6 |
+| goods-filtered | 7 |
+| goods-prohibited | 3 |
+| goods-raw | 16 |
+| prohibition-list | 2 |
+
+По количеству сообщений в топиках видно, что и валидный json, но не проходящий по avro-схеме, корректно отправлен в `goods-dlq` (это у меня фикстуры boo.json и moo.json), и "глупые часы" поехали в `goods-prohibited`.
+
+6 + 7 + 3 = 16, всё прекрасно.
+
+То есть и Schema Registry работает, и фильтрация, и т.п.
+
+**Посмотрим на mart-кластер.**
+
+```
+http://localhost:8070/ui/clusters/mart/all-topics?perPage=25
+```
+
+| Topic Name | Number of messages |
+|------------|--------------------|
+| client-api-search | 28 |
+| client-recommendations | 7 |
+| goods-filtered | 7 |
+
+Видно, что Mirror Maker работает, реплицирует два топика, так же видно, что Spark старается, пишет в `client-recommendations`.
+
+Можем поискать от пользователя 33 допустим, и у нас тут же появится ещё рекомендация, будет 8:
+
+```bash
+...$ curl -s http://localhost:6077/search-good-by-name/333/сельдь | jq
+[]
+```
+
+```
+http://localhost:8070/ui/clusters/mart/all-topics?perPage=25
+```
+
+| Topic Name | Number of messages |
+|------------|--------------------|
+| client-recommendations | 8 |
+
+```bash
+...$ curl -s http://localhost:6077/get-recommendations/333 | jq
+{
+  "client": 333,
+  "generated_at": "2026-04-04T18:28:11.229958+00:00",
+  "top_words": [
+    {
+      "WORD": "сельдь",
+      "COUNT": 1
+    }
+  ]
+}
+```
+
+Спарк работает.
+
+Ну можно посмотреть логи Sparj job-а:
+
+```bash
+...$ sudo docker logs -n 150 spark-recommendations-job
+...
+26/04/04 18:28:11 INFO MicroBatchExecution: Streaming query made progress: {
+  "id" : "30fe40cc-34ed-44f1-8969-e15dd730ed42",
+  "runId" : "af340e4d-e898-463d-89cb-f85d990706f4",
+  "name" : null,
+  "timestamp" : "2026-04-04T18:28:10.001Z",
+  "batchId" : 6,
+  "numInputRows" : 2,
+  "inputRowsPerSecond" : 0.19998000199980004,
+  "processedRowsPerSecond" : 1.574803149606299,
+  "durationMs" : {
+    "addBatch" : 1207,
+    "commitOffsets" : 28,
+    "getBatch" : 1,
+    "latestOffset" : 1,
+    "queryPlanning" : 3,
+    "triggerExecution" : 1270,
+    "walCommit" : 27
+  },
+  "stateOperators" : [ ],
+  "sources" : [ {
+    "description" : "KafkaV2[Subscribe[client-api-search]]",
+    "startOffset" : {
+      "client-api-search" : {
+        "2" : 28,
+        "1" : 0,
+        "0" : 0
+      }
+    },
+    "endOffset" : {
+      "client-api-search" : {
+        "2" : 29,
+        "1" : 0,
+        "0" : 0
+      }
+    },
+    "latestOffset" : {
+      "client-api-search" : {
+        "2" : 29,
+        "1" : 0,
+        "0" : 0
+      }
+    },
+    "numInputRows" : 2,
+    "inputRowsPerSecond" : 0.19998000199980004,
+    "processedRowsPerSecond" : 1.574803149606299,
+    "metrics" : {
+      "avgOffsetsBehindLatest" : "0.0",
+      "maxOffsetsBehindLatest" : "0",
+      "minOffsetsBehindLatest" : "0"
+    }
+  } ],
+  "sink" : {
+    "description" : "ForeachBatchSink",
+    "numOutputRows" : -1
+  }
+}
+...
+```
+
+**Интересный кейс:**
+
+Фикстуры я создавал так, чтобы товар 12345 (`Умные часы XYZ`) попадал в поток несколько раз, с разными остатками и разным `updated_at`, а код мы написали так, чтобы в постгрес попадал всегда та запись по товару, у которой более свежий `updated_at` (и я так составил фикстуры, что именно у него остаток 777).
+
+```bash
+...$ sudo docker exec -it postgres psql -h 127.0.0.1 -U postgres-user -d shop
+shop=# 
+shop=# SELECT
+  product_data ->> 'name' as "name",
+  product_data -> 'stock' ->> 'available' as "available",
+  product_data -> 'price' ->> 'amount' as "amount"
+FROM
+  goods_filtered
+WHERE
+  product_id = '12345'
+;
+      name      | available | amount  
+----------------+-----------+---------
+ Умные часы XYZ | 777       | 7777.77
+(1 row)
+
+shop=# exit
+```
+
+Мы видим, что дедупликация в микробатче в Фауст-приложении и условный апсерт в постгрес отработали как задумано.
+
+**Мониторинг...**
+
+Тут у нас есть раздел ниже в доке: [5.1. Эту итерацию делал Cursor. А мы проверим.](#dev_proc_iteration_5_cursor).
+
+И вроде как бы всё... Можно ещё зайти в ksqlDB:
+
+```bash
+$ sudo docker exec -it ksqldb-cli bash
+[appuser@ksqldb-cli ~]$ ksql http://ksqldb-server:8088
+...
+ksql> SELECT * FROM client_recommendations_latest EMIT CHANGES;
++------------------------------------------+------------------------------------------+------------------------------------------+
+|CLIENT                                    |GENERATED_AT                              |TOP_WORDS                                 |
++------------------------------------------+------------------------------------------+------------------------------------------+
+|33                                        |2026-04-04T18:03:52.212582+00:00          |[{WORD=boo, COUNT=3}, {WORD=moo, COUNT=3}]|
+|22                                        |2026-04-04T18:04:31.226027+00:00          |[{WORD=умн, COUNT=4}, {WORD=глуп, COUNT=3}|
+|                                          |                                          |, {WORD=zoo, COUNT=3}, {WORD=woo, COUNT=3}|
+|                                          |                                          |]                                         |
+|11                                        |2026-04-04T18:05:51.188372+00:00          |[{WORD=глуп, COUNT=5}, {WORD=умн, COUNT=4}|
+|                                          |                                          |]                                         |
+|333                                       |2026-04-04T18:28:11.229958+00:00          |[{WORD=сельдь, COUNT=1}]                  |
+^CQuery terminated
+ksql> exit
+Exiting ksqlDB.
+[appuser@ksqldb-cli ~]$ exit
+exit
+```
+
+Всё. Всё работает как запрошено.
+
+Не забываем гасить проект
+
+```bash
+sudo docker compose --env-file .env.example down -v
+```
+
+---
 
 ## <a name="dev_proc_iteration_1">Разработка: Итерация 1: Два Kafka-кластера в репликации ведущий-ведомый. Mirror Maker.</a>
 
@@ -1910,7 +2262,7 @@ WHERE
 
 shop=# exit
 
-# Ура: дедупликация в микробатче в файст-прилодении работает как задумано.
+# Ура: дедупликация в микробатче в фауст-прилодении работает как задумано.
 
 # ждём сколько-то секунд, чтобы файл пошёл отдельным батчем,
 # и мы убедились, что он не проходит на уровне upsert-а в postgres

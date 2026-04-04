@@ -19,7 +19,8 @@ import requests
 from kafka import KafkaProducer
 from pyspark.sql import SparkSession
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("recommendations_job")
 
 CONFLUENT_MAGIC = 0
@@ -66,7 +67,11 @@ def _schema_for_id(sess: requests.Session, schema_id: int) -> dict[str, Any]:
     return json.loads(data["schema"])
 
 
-def _decode_confluent_avro(sess: requests.Session, buf: bytes, cache: dict[int, dict]) -> dict[str, Any]:
+def _decode_confluent_avro(
+        sess: requests.Session,
+        buf: bytes,
+        cache: dict[int, dict]
+) -> dict[str, Any]:
     if not buf:
         return {}
     if buf[0] != CONFLUENT_MAGIC:
@@ -79,7 +84,11 @@ def _decode_confluent_avro(sess: requests.Session, buf: bytes, cache: dict[int, 
     return fastavro.schemaless_reader(bio, schema)
 
 
-def _encode_confluent_avro(schema: dict[str, Any], schema_id: int, record: dict[str, Any]) -> bytes:
+def _encode_confluent_avro(
+        schema: dict[str, Any],
+        schema_id: int,
+        record: dict[str, Any]
+) -> bytes:
     bio = io.BytesIO()
     fastavro.schemaless_writer(bio, schema, record)
     payload = bio.getvalue()
@@ -111,16 +120,25 @@ def _save_state(path: str, state: dict[str, Counter]) -> None:
 def main() -> None:
     topic_search = os.environ["TOPIC_CLIENT_API_SEARCH"]
     topic_out = os.environ["TOPIC_CLIENT_RECOMMENDATIONS"]
-    group = os.environ.get("KAFKA_SPARK_CONSUMER_GROUP", "spark-recommendations")
-    checkpoint = os.environ.get("SPARK_CHECKPOINT_DIR", "/checkpoint/recommendations")
+    group = os.environ.get(
+        "KAFKA_SPARK_CONSUMER_GROUP", "spark-recommendations")
+    checkpoint = os.environ.get(
+        "SPARK_CHECKPOINT_DIR", "/checkpoint/recommendations")
     state_path = os.path.join(checkpoint, "word_state.json")
 
     secrets = os.environ["CONTAINER_PATH_SECRETS"]
+
     def _env_file(name: str) -> str:
         return os.environ[name].strip().strip('"').strip("'")
 
-    key_avsc_path = os.path.join(secrets, _env_file("CLIENT_RECOMMENDATIONS_KEY_AVRO_SCHEMA_FILE_NAME"))
-    val_avsc_path = os.path.join(secrets, _env_file("CLIENT_RECOMMENDATIONS_VALUE_AVRO_SCHEMA_FILE_NAME"))
+    key_avsc_path = os.path.join(
+        secrets,
+        _env_file("CLIENT_RECOMMENDATIONS_KEY_AVRO_SCHEMA_FILE_NAME")
+    )
+    val_avsc_path = os.path.join(
+        secrets,
+        _env_file("CLIENT_RECOMMENDATIONS_VALUE_AVRO_SCHEMA_FILE_NAME")
+    )
     key_schema_encode = _load_avsc(key_avsc_path)
     val_schema_encode = _load_avsc(val_avsc_path)
 
@@ -130,7 +148,8 @@ def main() -> None:
     decode_cache: dict[int, dict] = {}
 
     bootstrap = _bootstrap_mart()
-    jaas_c = _jaas(os.environ["SASL_UNAME_CONSUMER"], os.environ["SASL_PWD_CONSUMER"])
+    jaas_c = _jaas(
+        os.environ["SASL_UNAME_CONSUMER"], os.environ["SASL_PWD_CONSUMER"])
 
     trust = os.environ["CONTAINER_PATH_TRUSTSTORE"]
     kstore = os.environ["CONTAINER_PATH_KEYSTORE"]
@@ -151,17 +170,22 @@ def main() -> None:
         retries=5,
     )
 
-    spark = SparkSession.builder.appName("client-recommendations").getOrCreate()
+    spark = SparkSession.builder.appName(
+        "client-recommendations"
+    ).getOrCreate()
 
     state_holder: dict[str, Counter] = _load_state(state_path)
 
     kafka_opts = {
         "kafka.bootstrap.servers": bootstrap,
         "subscribe": topic_search,
-        "startingOffsets": os.environ.get("SPARK_KAFKA_STARTING_OFFSETS", "earliest"),
-        "maxOffsetsPerTrigger": os.environ.get("SPARK_KAFKA_MAX_OFFSETS", "2000"),
+        "startingOffsets": os.environ.get(
+            "SPARK_KAFKA_STARTING_OFFSETS", "earliest"),
+        "maxOffsetsPerTrigger": os.environ.get(
+            "SPARK_KAFKA_MAX_OFFSETS", "2000"),
         "failOnDataLoss": "false",
-        # Офсеты только в Spark checkpoint; auto.commit в Kafka source не поддерживается.
+        # Офсеты только в Spark checkpoint;
+        # auto.commit в Kafka source не поддерживается.
         # Фиксированный group — под ACL (mart); один запрос на group id.
         "kafka.group.id": group,
         "kafka.security.protocol": "SASL_SSL",
@@ -187,7 +211,8 @@ def main() -> None:
         for row in rows:
             search_seen += 1
             try:
-                rec = _decode_confluent_avro(sess, bytes(row.value), decode_cache)
+                rec = _decode_confluent_avro(
+                    sess, bytes(row.value), decode_cache)
             except Exception as e:
                 log.warning("skip search message decode: %s", e)
                 continue
@@ -210,8 +235,10 @@ def main() -> None:
                 "top_words": [{"word": w, "count": int(c)} for w, c in top],
             }
             key_rec = {"client": client}
-            kbytes = _encode_confluent_avro(key_schema_encode, key_schema_id, key_rec)
-            vbytes = _encode_confluent_avro(val_schema_encode, val_schema_id, val_rec)
+            kbytes = _encode_confluent_avro(
+                key_schema_encode, key_schema_id, key_rec)
+            vbytes = _encode_confluent_avro(
+                val_schema_encode, val_schema_id, val_rec)
             producer.send(topic_out, key=kbytes, value=vbytes)
         producer.flush()
         _save_state(state_path, state_holder)
@@ -224,7 +251,8 @@ def main() -> None:
     q = (
         raw.writeStream.foreachBatch(foreach_batch)
         .option("checkpointLocation", checkpoint)
-        .trigger(processingTime=os.environ.get("SPARK_TRIGGER_INTERVAL", "10 seconds"))
+        .trigger(processingTime=os.environ.get(
+            "SPARK_TRIGGER_INTERVAL", "10 seconds"))
         .start()
     )
     q.awaitTermination()

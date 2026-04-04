@@ -38,7 +38,8 @@ async def _get_pg_pool() -> AsyncConnectionPool | None:
         conninfo = _conninfo_from_env()
         if not conninfo:
             return None
-        pool = AsyncConnectionPool(conninfo=conninfo, min_size=1, max_size=5, open=False)
+        pool = AsyncConnectionPool(
+            conninfo=conninfo, min_size=1, max_size=5, open=False)
         await pool.open()
         _pg_pool = pool
         return _pg_pool
@@ -79,11 +80,13 @@ async def _publish_client_api_search(client: int, word: str) -> None:
             return
         await topic.send(value={"client": int(client), "word": word})
     except Exception as e:
-        app.logger.warning("client-api-search: не удалось отправить в Kafka: %s", e)
+        app.logger.warning(
+            "client-api-search: не удалось отправить в Kafka: %s", e)
 
 
 def _ksqldb_rest_base() -> str:
-    """HTTP REST ksqlDB (сеть Docker), не SASL к брокеру — только pull query."""
+    """HTTP REST ksqlDB (сеть Docker),
+    не SASL к брокеру — только pull query."""
     url = (os.getenv("KSQLDB_REST_URL") or "").strip().rstrip("/")
     if url:
         return url
@@ -93,7 +96,8 @@ def _ksqldb_rest_base() -> str:
 
 
 def _iter_ksql_query_json_objects(body: str):
-    """Тело ответа POST /query: несколько JSON-подряд (часто pretty-printed, не «одна строка = один JSON»)."""
+    """Тело ответа POST /query: несколько JSON-подряд
+    (часто pretty-printed, не «одна строка = один JSON»)."""
     decoder = json.JSONDecoder()
     idx = 0
     n = len(body)
@@ -108,11 +112,13 @@ def _iter_ksql_query_json_objects(body: str):
     while idx < n and body[idx].isspace():
         idx += 1
     if idx < n:
-        raise json.JSONDecodeError("trailing data after ksql JSON stream", body, idx)
+        raise json.JSONDecodeError(
+            "trailing data after ksql JSON stream", body, idx)
 
 
 def _iter_ksql_query_frames(body: str):
-    """Один или несколько JSON-сегментов; сегмент может быть dict или list[dict] (формат pull в части версий)."""
+    """Один или несколько JSON-сегментов; сегмент может быть dict
+    или list[dict] (формат pull в части версий)."""
     for top in _iter_ksql_query_json_objects(body):
         if isinstance(top, dict):
             yield top
@@ -123,10 +129,12 @@ def _iter_ksql_query_frames(body: str):
 
 
 def _ksqldb_pull_recommendations_sync(client_id: int) -> dict | None:
-    """Синхронный POST /query; pull-ответ — последовательность JSON (header, row, finalMessage)."""
+    """Синхронный POST /query; pull-ответ — последовательность JSON
+    (header, row, finalMessage)."""
     sql = (
         "SELECT client, generated_at, top_words "
-        f"FROM CLIENT_RECOMMENDATIONS_LATEST WHERE client = {int(client_id)} LIMIT 1;"
+        f"FROM CLIENT_RECOMMENDATIONS_LATEST "
+        f"WHERE client = {int(client_id)} LIMIT 1;"
     )
     url = f"{_ksqldb_rest_base()}/query"
     resp = requests.post(
@@ -176,17 +184,26 @@ async def get_recommendations(web, request, client: int):
     if client_id < 0:
         return web.json({"error": "client must be non-negative"}, status=400)
     try:
-        row = await asyncio.to_thread(_ksqldb_pull_recommendations_sync, client_id)
+        row = await asyncio.to_thread(
+            _ksqldb_pull_recommendations_sync, client_id)
     except requests.RequestException as e:
         app.logger.exception("ksqlDB pull query HTTP error: %s", e)
-        return web.json({"error": "ksqlDB request failed", "detail": str(e)}, status=502)
+        return web.json(
+            {"error": "ksqlDB request failed", "detail": str(e)}, status=502)
     except RuntimeError as e:
         app.logger.warning("ksqlDB pull query: %s", e)
         return web.json({"error": str(e)}, status=502)
     except json.JSONDecodeError as e:
-        return web.json({"error": "invalid ksqlDB response", "detail": str(e)}, status=502)
+        return web.json(
+            {
+                "error": "invalid ksqlDB response",
+                "detail": str(e)
+            },
+            status=502
+        )
     if row is None:
-        return web.json({"error": "no recommendations for this client"}, status=404)
+        return web.json(
+            {"error": "no recommendations for this client"}, status=404)
     return web.json(row)
 
 
@@ -230,17 +247,21 @@ async def search_good_by_name(web, request, client: int, word: str):
         try:
             client_id = int(client)
         except (TypeError, ValueError):
-            return web.json({'error': 'client must be an integer'}, status=400)
+            return web.json(
+                {'error': 'client must be an integer'}, status=400)
 
         word = (word or "").strip()
         if len(word) < 2:
-            return web.json({'error': 'word must be at least 2 characters'}, status=400)
+            return web.json(
+                {'error': 'word must be at least 2 characters'}, status=400)
         if len(word) > 64:
-            return web.json({'error': 'word must be at most 64 characters'}, status=400)
+            return web.json(
+                {'error': 'word must be at most 64 characters'}, status=400)
 
         pool = await _get_pg_pool()
         if pool is None:
-            return web.json({'error': 'postgres is not configured'}, status=500)
+            return web.json(
+                {'error': 'postgres is not configured'}, status=500)
 
         word_esc = _escape_like(word)
         pattern = f"%{word_esc}%"
@@ -251,10 +272,13 @@ async def search_good_by_name(web, request, client: int, word: str):
                 # статистика запросов (upsert)
                 await conn.execute(
                     """
-                    INSERT INTO client_api_search (client, word, request_counter)
-                    VALUES (%s, %s, 1)
+                    INSERT INTO client_api_search
+                        (client, word, request_counter)
+                    VALUES
+                        (%s, %s, 1)
                     ON CONFLICT (client, word)
-                    DO UPDATE SET request_counter = client_api_search.request_counter + 1
+                    DO UPDATE
+                    SET request_counter = client_api_search.request_counter + 1
                     """,
                     (client_id, word),
                 )
@@ -278,7 +302,12 @@ async def search_good_by_name(web, request, client: int, word: str):
                     )
                     rows = await cur.fetchall()
 
-        result = [{'product_id': pid, 'product_name': name} for (pid, name) in rows]
+        result = [
+            {
+                'product_id': pid,
+                'product_name': name
+            } for (pid, name) in rows
+        ]
         await _publish_client_api_search(client_id, word)
         SHOP_API_SEARCH_GOOD_BY_NAME_TOTAL.inc()
         return web.json(result)

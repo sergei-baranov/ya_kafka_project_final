@@ -1,17 +1,18 @@
 import warnings
+
 warnings.simplefilter("ignore", UserWarning)
 
 import os
 import ssl
-import tempfile
 import subprocess
+import tempfile
+
 import faust
-from faust.auth import SASLCredentials
 import requests
-from fastavro import parse_schema, schemaless_writer, validate
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import pkcs12
-
+from fastavro import parse_schema, schemaless_writer, validate
+from faust.auth import SASLCredentials
 
 SCHEMA_REGISTRY_URL = os.getenv(
     'SCHEMA_REGISTRY_REST_URL_INNER', 'https://schema-registry:8081')
@@ -39,10 +40,16 @@ if not SB_HOSTS:
         "CRITICAL: No bootstrap servers found in environment variables!"
     )
 
-# Соответствие RF кластера (у Faust по умолчанию 1 — на стенде с RF=3 это ломает CreateTopics/metadata).
+# Соответствие RF кластера (у Faust по умолчанию 1 — на стенде с RF=3
+# это ломает CreateTopics/metadata).
 FAUST_TOPIC_RF = int(os.getenv('TOPIC_REPLICATION_FACTOR', '3'))
-# Фиксированный reply_to из env (TOPIC_FAUST_REPLY): один топик для ask(), совпадает с предсозданием в setup-acls-stage.sh.
+# Число партиций для внутренних топиков Faust (repartition, changelog таблиц).
+# Должно совпадать с предсозданием changelog в setup-acls-stage.sh.
+FAUST_TOPIC_PARTITIONS = int(os.getenv('FAUST_TOPIC_PARTITIONS', '8'))
+# Фиксированный reply_to из env (TOPIC_FAUST_REPLY): один топик для ask(),
+# совпадает с предсозданием в setup-acls-stage.sh.
 FAUST_REPLY_TOPIC = os.getenv('TOPIC_FAUST_REPLY', '').strip()
+
 
 def get_ca_pem(jks_path, password, alias):
     # Keytool, т.к. cryptography не читает JKS
@@ -62,28 +69,32 @@ def get_ca_pem(jks_path, password, alias):
         cmd, capture_output=True, check=True, text=True
     ).stdout.encode()
 
+
 def get_client_pem(p12_path, password):
     with open(p12_path, "rb") as f:
         # cryptography для PKCS12
         p_key, cert, _ = pkcs12.load_key_and_certificates(
             f.read(), password.encode())
-    
+
     key_pem = p_key.private_bytes(
-        serialization.Encoding.PEM, 
-        serialization.PrivateFormat.TraditionalOpenSSL, 
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.TraditionalOpenSSL,
         serialization.NoEncryption()
     )
     cert_pem = cert.public_bytes(serialization.Encoding.PEM)
     return key_pem, cert_pem
 
+
 ca_data = get_ca_pem(JKS_PATH, TRUSTSTORE_PASS, CA_ALIAS)
 key_data, cert_data = get_client_pem(P12_PATH, KEYSTORE_PASS)
+
 
 def create_tmp_file(data):
     f = tempfile.NamedTemporaryFile(delete=False)
     f.write(data)
     f.close()
     return f.name
+
 
 ca_f_path = create_tmp_file(ca_data)
 key_f_path = create_tmp_file(key_data)
@@ -97,8 +108,10 @@ ssl_ctx.load_cert_chain(certfile=cert_f_path, keyfile=key_f_path)
 ssl_ctx.check_hostname = True
 ssl_ctx.verify_mode = ssl.CERT_REQUIRED
 
-# Брокер: SASL_SSL (mTLS + PLAIN). Для aiokafka Faust собирает параметры из SASLCredentials,
-# а не из сырого SSLContext и не из ключей вида sasl.username (это не kwargs aiokafka).
+# Брокер: SASL_SSL (mTLS + PLAIN).
+# Для aiokafka Faust собирает параметры из SASLCredentials,
+# а не из сырого SSLContext и не из ключей вида sasl.username
+# (это не kwargs aiokafka).
 _app_kwargs = dict(
     broker=broker_url,
     broker_credentials=SASLCredentials(
@@ -113,6 +126,7 @@ _app_kwargs = dict(
     consumer_api_version=KAFKA_API_VERSION,
     producer_api_version=KAFKA_API_VERSION,
     topic_replication_factor=FAUST_TOPIC_RF,
+    topic_partitions=FAUST_TOPIC_PARTITIONS,
     store='rocksdb://',
     autodiscover=True,
     origin='shop_api',
@@ -129,7 +143,8 @@ SSL_CONFIG = {
     'ca': ca_f_path,
     'cert': cert_f_path,
     'key': key_f_path,
-    'url': os.getenv('SCHEMA_REGISTRY_REST_URL_INNER', 'https://schema-registry:8081')
+    'url': os.getenv(
+        'SCHEMA_REGISTRY_REST_URL_INNER', 'https://schema-registry:8081')
 }
 
 from . import pages  # noqa: E402,F401 — регистрация /metrics и HTTP view

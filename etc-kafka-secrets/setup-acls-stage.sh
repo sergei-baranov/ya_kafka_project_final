@@ -47,6 +47,13 @@ SHOP_API_TOPICS=(
   $TOPIC_FAUST_REPLY
 )
 
+# Faust: changelog таблицы block_words_table должен иметь столько же партиций,
+# что и repartition-топик group_by (topic_partitions приложения, по умолчанию 8).
+: "${FAUST_TOPIC_PARTITIONS:=8}"
+TOPICS_CLEANUP_POLICY_COMPACT+=(
+  "${SHOP_API_APP_NAME}-block_words_table-changelog:${FAUST_TOPIC_PARTITIONS}"
+)
+
 
 echo "--- 1. Очистка старых ACL ---"
 

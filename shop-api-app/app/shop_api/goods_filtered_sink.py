@@ -19,8 +19,10 @@ ON CONFLICT (product_id) DO UPDATE SET
     updated_at = NOW()
 WHERE
     -- Не падаем на невалидных датах:
-    -- 1) если updated_at в EXCLUDED невалидный/пустой → не обновляем (считаем самым старым)
-    -- 2) если текущий updated_at невалидный/пустой → обновляем валидным EXCLUDED
+    -- 1) если updated_at в EXCLUDED невалидный/пустой → не обновляем
+    -- (считаем самым старым)
+    -- 2) если текущий updated_at невалидный/пустой → обновляем
+    -- валидным EXCLUDED
     -- 3) если оба валидны → обновляем только если EXCLUDED >= текущего
     (
       CASE
@@ -132,17 +134,23 @@ class GoodsFilteredBatchSink:
         self._lock = asyncio.Lock()
         self._pending: dict[str, dict[str, Any]] = {}
         self._last_flush = time.monotonic()
-        self._batch_max = max(1, int(os.getenv("GOODS_FILTERED_BATCH_MAX", "25")))
+        self._batch_max = max(
+            1, int(os.getenv("GOODS_FILTERED_BATCH_MAX", "25")))
         self._flush_interval_s = max(
-            0.05, float(os.getenv("GOODS_FILTERED_FLUSH_INTERVAL_MS", "150")) / 1000.0
+            0.05,
+            float(
+                os.getenv("GOODS_FILTERED_FLUSH_INTERVAL_MS", "150")) / 1000.0
         )
-        self._max_retries = max(0, int(os.getenv("GOODS_FILTERED_DB_MAX_RETRIES", "3")))
-        self._backoff_base = float(os.getenv("GOODS_FILTERED_DB_BACKOFF_SEC", "0.5"))
+        self._max_retries = max(
+            0, int(os.getenv("GOODS_FILTERED_DB_MAX_RETRIES", "3")))
+        self._backoff_base = float(
+            os.getenv("GOODS_FILTERED_DB_BACKOFF_SEC", "0.5"))
         self._flush_task: asyncio.Task | None = None
 
     async def start(self) -> None:
         if not self._conninfo:
-            self._log.info("Postgres goods_filtered sink: выключен (нет host/conninfo)")
+            self._log.info(
+                "Postgres goods_filtered sink: выключен (нет host/conninfo)")
             return
         try:
             self._pool = AsyncConnectionPool(
@@ -150,12 +158,14 @@ class GoodsFilteredBatchSink:
                 min_size=1,
                 max_size=int(os.getenv("SHOP_API_POSTGRES_POOL_MAX", "5")),
                 open=False,
-                timeout=float(os.getenv("SHOP_API_POSTGRES_POOL_TIMEOUT", "30")),
+                timeout=float(
+                    os.getenv("SHOP_API_POSTGRES_POOL_TIMEOUT", "30")),
             )
             await self._pool.open()
         except Exception as e:
             self._log.critical(
-                "Postgres pool не открылся, запись в goods_filtered отключена: %s", e
+                "Postgres pool не открылся, "
+                "запись в goods_filtered отключена: %s", e
             )
             self._pool = None
             return
@@ -202,7 +212,8 @@ class GoodsFilteredBatchSink:
             return
         pid = data.get("product_id")
         if not isinstance(pid, str) or not pid:
-            self._log.warning("Postgres sink: пропуск, нет product_id в записи")
+            self._log.warning(
+                "Postgres sink: пропуск, нет product_id в записи")
             return
         snapshot: dict[str, Any] = json.loads(json.dumps(data))
         snapshot_ts = _parse_updated_at(snapshot.get("updated_at"))
@@ -214,7 +225,8 @@ class GoodsFilteredBatchSink:
             else:
                 existing_ts = _parse_updated_at(existing.get("updated_at"))
                 # Если новая дата валиднее/позже — заменяем.
-                # Если даты равны (включая None==None) — побеждает последнее пришедшее.
+                # Если даты равны
+                # (включая None==None) — побеждает последнее пришедшее.
                 if existing_ts is None and snapshot_ts is None:
                     self._pending[pid] = snapshot
                 elif existing_ts is None and snapshot_ts is not None:
@@ -236,7 +248,10 @@ class GoodsFilteredBatchSink:
                 to_write = self._pending
                 self._pending = {}
                 self._last_flush = now
-            elif self._pending and (now - self._last_flush) >= self._flush_interval_s:
+            elif (
+                self._pending
+                and (now - self._last_flush) >= self._flush_interval_s
+            ):
                 self._log.debug(
                     "goods_filtered: флуш по таймеру (%s шт, interval_ms=%s)",
                     len(self._pending),
