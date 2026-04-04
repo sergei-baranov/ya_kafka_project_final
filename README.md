@@ -16,7 +16,7 @@
   - [Настройки Spark-нод](#init_layer_spark)
   - [Настройка shop-api-app](#init_layer_shop_api_app)
 - [Основные Data-pipeline-ы/фазы пайплайнов](#general_descr_data_pipelines)
-  - Управление списком запрещённых в названиях товаров слов
+  - [Управление списком запрещённых в названиях товаров слов](#data_pipelines_prohibition_list)
   - Загрузка и фильтрация товаров
   - Поиск товаров по названию
   - Формирование рекомендаций
@@ -246,9 +246,51 @@ SQL-выражения из этого файла исполнятся толь�
 
 ## <a name="general_descr_data_pipelines">Основные Data-pipeline-ы/фазы пайплайнов</a>
 
-TODO
+### <a name="data_pipelines_prohibition_list">Управление списком запрещённых в названиях товаров слов</a>
 
-NB: `null` (`tombstone`) в TODO
+Этим списком мы управляем через топик `prohibition-list` в stage-кластере Kafka.
+
+Персистируется он в виде Faust-таблицы (в нашем случае в нашем случае настроен вариант с rocksdb) и/или changelog-топиками в той же Kafka.
+
+**Короткие пайплайны на чтение:**
+
+- `shop-api-app` Faust CLI API: `list-block-words`
+
+`@app.command() list_block_words()`
+
+```bash
+sudo docker exec shop-api-app faust -A shop_api.app list-block-words
+```
+- `shop-api-app` Faust HTTP API: `/get-block-words/`
+
+`@app.page() get_block_words()`
+
+- `shop-api-app` Faust HTTP API: `/get-block-word/{word}`
+
+`@app.page() get_block_word()`
+
+**Короткий пайплайн на запись:**
+
+- `shop-api-app` Faust CLI API: `block-word --word str --block bool`
+
+```
+sudo docker exec shop-api-app faust -A shop_api.app block-word --word глуп --block True
+```
+
+Реализация: `@app.command block_word`: отправка сообщения в топик `prohibition-list` (`blocked_words_topic`) через Faust-агента `persist_block_words` через Faust-таблицу `block_words_table`.
+
+**Фазы длинных пайплайнов:**
+
+Топик, кроме вышеописанных кейсов администрирования, используется только в агенте загрузки и фильтрации товаров (`validator_agent`) в том же Faust-приложении в сервисе `shop-api-app` (именно для фильтрации товаров по этим словам в названии товара).
+
+*TODO: Посмотреть, удаляются ли Фаустом сообщения из топика, в смысле помеяаются например как "`null` (`tombstone`)" и что там вообще под капотом кроме rocksdb, и вообще маппит ли он таблицу на топик, или только наоборот, и если маппит, то как попросить его нулл-ы отправлять и т.п.*
+
+### Загрузка и фильтрация товаров
+### Поиск товаров по названию
+### Формирование рекомендаций
+### Получение рекомендаций
+
+
 
 
 ## <a name="general_descr_services_depends_on">Зависимости сервисов</a>
