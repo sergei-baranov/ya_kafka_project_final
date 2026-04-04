@@ -3,12 +3,22 @@ import json
 import os
 
 import requests
+from prometheus_client import Counter, generate_latest
+
+# aiohttp (Faust web) не принимает charset внутри content_type для Response
+_PROM_METRICS_CT = "text/plain; version=0.0.4"
 from psycopg_pool import AsyncConnectionPool
 
 from .agents import AvroSerializer, _schema_registry_get_latest
 from .app import app
 from .goods_filtered_sink import _conninfo_from_env
 from .tables import block_words_table
+
+
+SHOP_API_SEARCH_GOOD_BY_NAME_TOTAL = Counter(
+    "shop_api_search_good_by_name_total",
+    "Вызовы HTTP /search-good-by-name/* (успешные ответы 200)",
+)
 
 
 _pg_pool: AsyncConnectionPool | None = None
@@ -151,6 +161,12 @@ def _ksqldb_pull_recommendations_sync(client_id: int) -> dict | None:
     return row_out
 
 
+@app.page('/metrics')
+async def prometheus_metrics(web, request):
+    # Faust ожидает web.bytes; content_type без charset — см. aiohttp Response
+    return web.bytes(generate_latest(), content_type=_PROM_METRICS_CT)
+
+
 @app.page('/get-recommendations/{client}')
 async def get_recommendations(web, request, client: int):
     try:
@@ -264,6 +280,7 @@ async def search_good_by_name(web, request, client: int, word: str):
 
         result = [{'product_id': pid, 'product_name': name} for (pid, name) in rows]
         await _publish_client_api_search(client_id, word)
+        SHOP_API_SEARCH_GOOD_BY_NAME_TOTAL.inc()
         return web.json(result)
     except Exception as e:
         return web.json({'error': str(e)}, status=500)

@@ -1,4 +1,4 @@
-# yakafka_project_final
+# Финальный проект курса "Apache Kafka для разработки и архитектуры"
 
 ## Содержание
 
@@ -6,7 +6,9 @@
   - [Описание](#general_descr_descr)
   - [Используемые технологии](#general_descr_technologies)
   - [Схема сервисов, дата-пайплайн, взаимодействие](#general_descr_schemas)
-  - [TODO на потом (техдолг и т.п.)](#general_descr_todo)
+    - [Структура проекта по сервисам, дата-пайплайны](#general_descr_schemas_1)
+    - [Зависимости сервисов](#general_descr_schemas_2)
+  - [Техдолг и т.п.](#general_descr_todo)
   - [Как проверять проект](#general_assignment_review)
 - [Быстрая проверка](#fast_assignment_review)
 - [Разработка: Итерация 1: Два Kafka-кластера в репликации ведущий-ведомый. Mirror Maker.](#dev_proc_iteration_1)
@@ -15,14 +17,22 @@
   - [Файлы 1-й итерации (для наглядности версионирования по фазам процесса разработки)](#dev_proc_iteration_1_files)
   - [Что проверяем после итерации](#dev_proc_iteration_1_checks)
   - [Запускаемся после первой фазы и проверяемся](#dev_proc_iteration_1_run)
+    - [1.1. Ничего не будем менять в .env.example и соотв. нигде](#dev_proc_iteration_1_run_1)
+    - [1.2. Генерируем сертификаты](#dev_proc_iteration_1_run_2)
+    - [1.3. Разворачиваемся, убеждаемся в общей работоспособности проекта](#dev_proc_iteration_1_run_3)
   - [План на Итерацию 2](#dev_proc_iteration_1_next_iteration_planning)
 - [Разработка: Итерация 2: SHOP API. Kafka Connect, Schema Registry, Faust.](#dev_proc_iteration_2)
   - [Узлы (сервисы в компоузере)](#dev_proc_iteration_2_nodes)
   - [Файлы 2-й итерации (для наглядности версионирования по фазам процесса разработки)](#dev_proc_iteration_2_files)
   - [Что проверяем после итерации](#dev_proc_iteration_2_checks)
   - [2.1. Kafka connect, source-коннектор shop-api-stage-reader (SpoolDirSchemaLessJsonSourceConnector)](#dev_proc_iteration_2_1)
+    - [Сначала проверяем работу системы с пользователем admin в kafka-connect:](#сначала-проверяем-работу-системы-с-пользователем-admin-в-kafka-connect)
+    - [Провернём всё то же, но под пользователем `connect_user`.](#провернём-всё-то-же-но-под-пользователем-connect_user)
   - [2.2. Schema Registry](#dev_proc_iteration_2_2)
   - [2.3. Faust-приложение](#dev_proc_iteration_2_3)
+    - [Что куда добавляем](#dev_proc_iteration_2_3_1)
+    - [Добавление конфига в коннектор выносим в сервис](#dev_proc_iteration_2_3_2)
+    - [Проверяем](#dev_proc_iteration_2_3_3)
   - [План на Итерацию 3](#dev_proc_iteration_2_next_iteration_planning)
 - [Разработка: Итерация 3: CLIENT API. PostgreSQL.](#dev_proc_iteration_3)
   - [Узлы (сервисы в компоузере)](#dev_proc_iteration_3_nodes)
@@ -30,7 +40,11 @@
   - [Что проверяем после итерации](#dev_proc_iteration_3_checks)
   - [3.1. Внедряем PostgreSQL в проект](#dev_proc_iteration_3_1)
   - [3.2. Срез свежайшего состояния товаров из kafka-топика goods-filtered в postgres-таблицу goods_filtered](#dev_proc_iteration_3_2)
+    - [Общее описание решения](#dev_proc_iteration_3_2_1)
+    - [Проверяем](#dev_proc_iteration_3_2_2)
   - [3.3. CLIENT API: поиск по названию товара (с логами и статистикой)](#dev_proc_iteration_3_3)
+    - [Общее описание решения](#dev_proc_iteration_3_3_1)
+    - [Проверяем](#dev_proc_iteration_3_3_2)
   - [План на Итерацию 4](#dev_proc_iteration_3_next_iteration_planning)
 - [Разработка: Итерация 4: Apache Spark. KSQLDB. Рекомендации.](#dev_proc_iteration_4)
   - [Узлы (сервисы в компоузере)](#dev_proc_iteration_4_nodes)
@@ -45,24 +59,48 @@
     - [4.2.5. Http-операция получения рекомендаций (Faust-приложение)](#dev_proc_iteration_4_2_5)
   - [План на Итерацию 5](#dev_proc_iteration_4_next_iteration_planning)
 - [Разработка: Итерация 5: Мониторинг: Prometheus, Grafana](#dev_proc_iteration_5)
+  - [5.1. Эту итерацию делал Cursor. А мы проверим.](#dev_proc_iteration_5_cursor)
+  - [5.2. Структура мониторинга](#dev_proc_iteration_5_structure)
+  - [5.3. Алертинг (учебный минимум)](#dev_proc_iteration_5_alerting)
+  - [5.4. Тестирование и воспроизведение работоспособности](#dev_proc_iteration_5_howto)
 
 ## <a name="general_descr">Общее описание</a>
 
 ### <a name="general_descr_descr">Описание</a>
 
-TODO
+Проект реализует учебно-демонстрационный функционал построения дата-пайплайнов условного маркетплейса: информация по товарам от продавцов, поисковые запросы от покупателей, аналитическая подсистема рекомендаций для покпателей - всё в потоковом режиме обработки (в реалтайме).
+
+Ядром системы являются продукты семейства и экосистемы Apache Kafka и сопутствующий отраслевой Data Engeneering инструментарий (см. следующий раздел [Используемые технологии](#general_descr_technologies)).
+
+Языком связки инструментария выбран python, системой развёртывания docker compose, python, shell.
+
+Учебно-демонстрационный проект по возможности эмулирует продакшн-усилия, в частности Kafka развёртывается как два KRaft-кластера в репликации, по три контроллера и три брокера в каждом, защищённые по SSL(mTLS)/SASL/ACL, система оснащена инструментарием мониторинга (в меру возможностей ресурсов учебного standalone-проекта) и т.п.
 
 ### <a name="general_descr_technologies">Используемые технологии</a>
 
-TODO
+Технологии, библиотеки, вендоры, языки, форматы, etc.
 
-  Apache Kafka, SSL(mTLS)/SASL/ACL, Kafka Connect, Schema Registry, Mirror Maker, Avro, Grafana, Prometheus, ksqlDB, Apache Spark, Spark Structured Streaming, Faust-streaming, docker, docker compose, python, PostgreSQL
+- Apache Kafka, Kafka Connect, Schema Registry, Mirror Maker, ksqlDB,
+- KRaft, SSL(mTLS)/SASL/ACL, SpoolDirSchemaLessJsonSourceConnector,
+- Apache Spark, Spark Structured Streaming, PySpark,
+- PostgreSQL, Prometheus, Grafana,
+- Confluent, Bitnami,
+- Docker, Docker compose,
+- Python, Shell,
+- Faust-streaming, psycopg, asyncio, aiokafka, prometheus_client,
+- Avro, Streaming JSON
 
 ### <a name="general_descr_schemas">Схема сервисов, дата-пайплайн, взаимодействие</a>
 
+#### <a name="general_descr_schemas_1">Структура проекта по сервисам, дата-пайплайны</a>
+
+![ya_kafka_project_final](./ya_kafka_project_final.drawio.png)
+
 TODO
 
-Зависимости сервисов
+#### <a name="general_descr_schemas_2">Зависимости сервисов</a>
+
+TODO
 
 - Сначала надо развернуть два кафка-кластера
 - Затем надо запустить сервис, который создаст необходимые топики, в частности служебные для разных сервисов, и выставит ACL-ы (завершается после выполнения задания) (завершается после выполнения задания) (завершается после выполнения задания). Это позволит нам сузить права некоторым сервисам, не давая им слишком много прав для создания ими служебных тоиков и т.п.
@@ -70,9 +108,7 @@ TODO
 - А вслед за ним - сервис, который зарегистрирует в Schema Registry необходимые для работы прочих сервисов схемы под необходимые топики (завершается после выполнения задания).
 - После этого можно запускать Mirror Maker 1, за ним Kafka Connect, сервисы приложений и т.п.
 
-### <a name="general_descr_todo">TODO на потом (техдолг и т.п.)</a>
-
-TODO
+### <a name="general_descr_todo">Техдолг и т.п.</a>
 
 - Транзакционность и идемпотентность продьюсера Schema Registry (не снимая концепцию ограничения кастомного пользователя конкретными ACL-ами)
 - Кластеризация Schema Registry (полезно)
@@ -81,18 +117,28 @@ TODO
 - `kafka-connect` на SSL (mTLS)
 - из `etc-kafka-secrets` не-секреты (avro-схемы, sh для бутстрапа и т.п.) разнести по вольюмам сервисов-бутстраперов например и т.п.
 - пробежаться по сервисам проверить, кого не ограничили по памяти - того ограничить (соотнести с ограничениями внутри контейнеров, во избежание OOMKill-ов, замедления и т.п.)
+- неспешно допродумать и отрефакторить/развить мониторинг
+- ...
 
 ### <a name="general_assignment_review">Как проверять проект</a>
 
-TODO
-
 - Чтобы просто проверить исполнение - смотрим код в файлах и исполняемся по инструкциям в разделе **"Быстрая проверка"**,
-- чтобы проверить ход выполнения проекта - читаем следующие за ним разделы.
+- Чтобы проверить ход выполнения проекта - читаем следующие за ним разделы.
 
 
 ## <a name="fast_assignment_review">Быстрая проверка</a>
 
-TODO
+NB: везде, где далее по тексту встречается "192.168.100.225", у вас при развёртывании будет localhost или адрес вашей хостовой машины. Если необходимо - надо внести его в SAN-ы шаблона сертификата и перегенерировать сертификаты скриптом make-certs.sh (ниже по тексту, если дочитаете, мы это делаем на какой-то из первых итераций).
+
+NB: как было указано выше, развёртывание проекта будет занимать какое-то не-мгновенное время, поскольку в процессе встроены сервисы, ожидающие запуска, отработки и настраивающие другие сервисы.
+
+NB: конрейнерам ограничены ресурсы в compose.yaml (значения заданы переменными в env-файле) под работоспособность на хостовой машине с ограниченными ресурсами (32G RAM). Принеобходимости можно увеличить значения в env-файле (тут аккуратно: у некоторых сервисов внутри контейнеров есть настройки в файлах конфигураций, которые надо соотносить со внешними ограничениями контейнеров).
+
+NB: рекомендую разворачивать проект с аргументом --env-file .env.example или переименовать/скопировать .emv.example в .env. Не рекомендую менять значения переменных в env-файле, так как не всё покрыто переменными, и для многих настроек сервисов меняя переменные в env-файле надо согласованно поменять строки в файлах конфигураций, и даже в compose.yaml (ключи словарей).
+
+Для быстрой проверки мы развернём compose-проект, зададим руками (через cli api) стоп-слова для фильтрации запрещённых товаров по названиям, зальём фикстуры в директорию, которую прочитает Kafka Connect, и далее отработает пайплайн, а мы сделаем пару поисков товаров от разных пользователей по http api, и так же по http api посмотрим на условные рекомендации от аналитической подсистемы.
+
+Далее можно заливать товары, управлять списком стоп-слов, искать, смотреть, как меняются рекомендации, смотреть в веб-интерфейсах состояния подсистем, топики, рсубд, мониторинг, чтобы убедиться, что всё работает как задумано и описано.
 
 ```
 sudo docker compose --env-file .env.example up -d --build
@@ -141,13 +187,15 @@ phase1
 
 ### <a name="dev_proc_iteration_1_run">Запускаемся после первой фазы и проверяемся</a>
 
+NB: с каждой итерацией всё больше будет автоматизации при разворачивании проекта.
+
 Копируем содержимое директории `phase1` в директорию проета на хостовой машине, идём по шагам:
 
-#### 1. Ничего не будем менять в .env.example и соотв. нигде
+#### <a name="dev_proc_iteration_1_run_1">1.1. Ничего не будем менять в .env.example и соотв. нигде</a>
 
 Но если надо, то например `SAN`-ы меняем/добавляем в `[alt_names]` в `kafka.cnf.template` и `.env.example`, ограничения ресурсов в `.env.example`, если меняли названия хостов контейнеров, то кроме `compose.yaml` надо поменять `setup-acls-mart.sh` и `setup-acls-stage.sh`, и т.д.
 
-#### 2. Генерируем сертификаты
+#### <a name="dev_proc_iteration_1_run_2">1.2. Генерируем сертификаты</a>
 
 Скрипт `make-certs.sh`
 
@@ -162,7 +210,7 @@ chmod +x make-certs.sh
 make-certs.sh
 ```
 
-#### 3. Разворачиваемся, убеждаемся в общей работоспособности проекта
+#### <a name="dev_proc_iteration_1_run_3">1.3. Разворачиваемся, убеждаемся в общей работоспособности проекта</a>
 
 **Разворачиваем проект:**
 
@@ -304,33 +352,21 @@ Faust-приложение для CLIENT API - это про другое, пр�
 
 ### <a name="dev_proc_iteration_2_nodes">Узлы (сервисы в компоузере)</a>
 
-```bash
+```
 --services
 
-stage-controller-1
-stage-controller-2
-stage-controller-3
+stage-controller-1, stage-controller-2, stage-controller-3
+stage-broker-1, stage-broker-2, stage-broker-3
 
-stage-broker-1
-stage-broker-2
-stage-broker-3
-
-mart-controller-1
-mart-controller-2
-mart-controller-3
-
-mart-broker-1
-mart-broker-2
-mart-broker-3
+mart-controller-1, mart-controller-2, mart-controller-3
+mart-broker-1, mart-broker-2, mart-broker-3
 
 mirror-maker
 schema-registry
 kafka-connect
 kafka-ui
 
-topic-creation
-schemas-registrator
-connectors-registrator
+topic-creation, schemas-registrator, connectors-registrator
 
 shop-api-app
 
@@ -1024,13 +1060,13 @@ curl -s \
     "subject": "goods-filtered-value",
     "version": 1,
     "id": 1,
-    "schema": "{\"type\":\"record\",\"name\":\"Product\",\"namespace\":\"com.shop.inventory\",\"fields\":[{\"name\":\"product_id\",\"type\":\"string\"},{\"name\":\"name\",\"type\":\"string\"},{\"name\":\"price\",\"type\":{\"type\":\"record\",\"name\":\"Price\",\"fields\":[{\"name\":\"amount\",\"type\":\"double\"},{\"name\":\"currency\",\"type\":\"string\"}]}},{\"name\":\"stock\",\"type\":{\"type\":\"record\",\"name\":\"Stock\",\"fields\":[{\"name\":\"available\",\"type\":\"int\"},{\"name\":\"reserved\",\"type\":\"int\"}]}},{\"name\":\"sku\",\"type\":\"string\"},{\"name\":\"store_id\",\"type\":\"string\"},{\"name\":\"created_at\",\"type\":\"string\"},{\"name\":\"updated_at\",\"type\":\"string\"},{\"name\":\"description\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"category\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"brand\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"tags\",\"type\":[\"null\",{\"type\":\"array\",\"items\":\"string\"}],\"default\":null},{\"name\":\"images\",\"type\":[\"null\",{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"Image\",\"fields\":[{\"name\":\"url\",\"type\":\"string\"},{\"name\":\"alt\",\"type\":\"string\"}]}}],\"default\":null},{\"name\":\"specifications\",\"type\":[\"null\",{\"type\":\"map\",\"values\":\"string\"}],\"default\":null},{\"name\":\"index\",\"type\":[\"null\",\"string\"],\"default\":null}]}"
+    "schema": "{\"type\":\"record\",\"name\":\"Product\",...}"
   },
   {
     "subject": "goods-prohibited-value",
     "version": 1,
     "id": 1,
-    "schema": "{\"type\":\"record\",\"name\":\"Product\",\"namespace\":\"com.shop.inventory\",\"fields\":[{\"name\":\"product_id\",\"type\":\"string\"},{\"name\":\"name\",\"type\":\"string\"},{\"name\":\"price\",\"type\":{\"type\":\"record\",\"name\":\"Price\",\"fields\":[{\"name\":\"amount\",\"type\":\"double\"},{\"name\":\"currency\",\"type\":\"string\"}]}},{\"name\":\"stock\",\"type\":{\"type\":\"record\",\"name\":\"Stock\",\"fields\":[{\"name\":\"available\",\"type\":\"int\"},{\"name\":\"reserved\",\"type\":\"int\"}]}},{\"name\":\"sku\",\"type\":\"string\"},{\"name\":\"store_id\",\"type\":\"string\"},{\"name\":\"created_at\",\"type\":\"string\"},{\"name\":\"updated_at\",\"type\":\"string\"},{\"name\":\"description\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"category\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"brand\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"tags\",\"type\":[\"null\",{\"type\":\"array\",\"items\":\"string\"}],\"default\":null},{\"name\":\"images\",\"type\":[\"null\",{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"Image\",\"fields\":[{\"name\":\"url\",\"type\":\"string\"},{\"name\":\"alt\",\"type\":\"string\"}]}}],\"default\":null},{\"name\":\"specifications\",\"type\":[\"null\",{\"type\":\"map\",\"values\":\"string\"}],\"default\":null},{\"name\":\"index\",\"type\":[\"null\",\"string\"],\"default\":null}]}"
+    "schema": "{\"type\":\"record\",\"name\":\"Product\",...}"
   }
 ]
 ```
@@ -1039,7 +1075,7 @@ curl -s \
 
 ### <a name="dev_proc_iteration_2_3">2.3. Faust-приложение</a>
 
-#### Что куда добавляем
+#### <a name="dev_proc_iteration_2_3_1">Что куда добавляем</a>
 
 - переменные `SERVICE_SHOP_API_APP_NAME`, `SASL_UNAME_SHOP_API`, `SASL_PWD_SHOP_API` и т.д. в `.env.example`
 - в секцию KafkaServer в broker.sasl.jaas.conf (мы его сейчас формируем динамически в `compose.yaml`): `user_${SASL_UNAME_SHOP_API}="${SASL_PWD_SHOP_API}";`
@@ -1056,7 +1092,7 @@ curl -s \
 
 **NB**: при работе в "отладочной" конфигурации `volume`-а для сервиса `shop-api-app` (`./shop-api-app/app:/app # dev mode`), кроме `compose down -v` надо делать например `sudo rm -Rf shop-api-app/app/shop_api_app-data`, `sudo rm shop-api-app/app/supervisord.log`, `sudo rm -R shop-api-app/app/shop_api/__pycache__` и т.д. для исключения рассинхронизации кафки и роксдб (в репозиторий едет другая конфигурация, с `volume`-ом `shop-api-app_data:/app`).
 
-#### Добавление конфига в коннектор выносим в сервис
+#### <a name="dev_proc_iteration_2_3_2">Добавление конфига в коннектор выносим в сервис</a>
 
 Добавляем в проект сервис `connectors-registrator`.
 
@@ -1072,7 +1108,7 @@ curl -sX POST -H 'Content-Type: application/json' \
 
 и завершить работу.
 
-#### Проверяем
+#### <a name="dev_proc_iteration_2_3_3">Проверяем</a>
 
 1. Разворачиваем проект
 
@@ -1385,35 +1421,23 @@ sudo docker logs -n 10 shop-api-app
 
 Из сервисов компоузера добавляется только PostgreSQL.
 
-```bash
+```
 --services
 
 postgres
 
-stage-controller-1
-stage-controller-2
-stage-controller-3
+stage-controller-1, stage-controller-2, stage-controller-3
+stage-broker-1, stage-broker-2, stage-broker-3
 
-stage-broker-1
-stage-broker-2
-stage-broker-3
-
-mart-controller-1
-mart-controller-2
-mart-controller-3
-
-mart-broker-1
-mart-broker-2
-mart-broker-3
+mart-controller-1, mart-controller-2, mart-controller-3
+mart-broker-1, mart-broker-2, mart-broker-3
 
 mirror-maker
 schema-registry
 kafka-connect
 kafka-ui
 
-topic-creation
-schemas-registrator
-connectors-registrator
+topic-creation, schemas-registrator, connectors-registrator
 
 shop-api-app
 
@@ -1507,7 +1531,7 @@ phase3
 
 ### <a name="dev_proc_iteration_3_2">3.2. Срез свежайшего состояния товаров из kafka-топика goods-filtered в postgres-таблицу goods_filtered</a>
 
-#### Общее описание решения
+#### <a name="dev_proc_iteration_3_2_1">Общее описание решения</a>
 
 Посоветовавшись с искусственными соратниками принимаем решение использовать не Kafka Connect для этого, а прописать этот функционал в Faust-приложении - там же, где оно пишет сообщения в сам этот топик.
 
@@ -1533,7 +1557,7 @@ phase3
 - `store_001_3.json`: товару "Умные часы XYZ" поместим в json целых три объекта, первому из трёх дадим самое позднее `updated_at`. При дедупликации в микробатче из трёх должен будет остаться только он, и именно его значения цены и остатка (пускай это будет 777 в этом случае) должны будут поехать на апсерт в постгрес
 - `store_001_4.json`: товару "Умные часы XYZ" поместим в json один объект, указав в `updated_at` датавремя более древнее, чем в `store_001_3.json`. Такая запись поедет в постгрес, но должна будет не примениться при апсерте, так как в апсерт мы вставим соответствующее условие.
 
-#### Проверяем
+#### <a name="dev_proc_iteration_3_2_2">Проверяем</a>
 
 Проверим, что всё запустилось
 
@@ -1746,7 +1770,7 @@ shop=# exit
 
 ### <a name="dev_proc_iteration_3_3">3.3. CLIENT API: поиск по названию товара (с логами и статистикой)</a>
 
-#### Общее описание решения
+#### <a name="dev_proc_iteration_3_3_1">Общее описание решения</a>
 
 Делаем поиск в постгресе по ILIKE.
 
@@ -1761,7 +1785,7 @@ shop=# exit
 
 Топик вставляем в предсоздание и раздачу ACL-ов на оба Kafka-кластера, снабжаем avro-схемой, организуем репликацию топика из stage-кластера Кафки в mart-кластер, и т.п. - всё по аналогии с уже сделанными ранее задачами.
 
-#### Проверяем
+#### <a name="dev_proc_iteration_3_3_2">Проверяем</a>
 
 **1. Разворачиваем проект, заливаем данные в старт пайплайна.**
 
@@ -1930,38 +1954,22 @@ shop=# exit
 
 postgres
 
-stage-controller-1
-stage-controller-2
-stage-controller-3
+stage-controller-1, stage-controller-2, stage-controller-3
+stage-broker-1, stage-broker-2, stage-broker-3
 
-stage-broker-1
-stage-broker-2
-stage-broker-3
-
-mart-controller-1
-mart-controller-2
-mart-controller-3
-
-mart-broker-1
-mart-broker-2
-mart-broker-3
+mart-controller-1, mart-controller-2, mart-controller-3
+mart-broker-1, mart-broker-2, mart-broker-3
 
 mirror-maker
 schema-registry
 kafka-connect
 kafka-ui
 
-spark-master
-spark-worker
-spark-recommendations-job
+spark-master, spark-worker, spark-recommendations-job
 
-ksqldb-server
-ksqldb-cli
+ksqldb-server, ksqldb-cli
 
-topic-creation
-schemas-registrator
-connectors-registrator
-ksqldb-bootstrap
+ksqldb-bootstrap, topic-creation, schemas-registrator, connectors-registrator
 
 shop-api-app
 
@@ -2426,4 +2434,304 @@ curl -s http://localhost:6077/search-good-by-name/22/woo
 
 ## <a name="dev_proc_iteration_5">Разработка: Итерация 5: Мониторинг: Prometheus, Grafana</a>
 
-TODO
+### <a name="dev_proc_iteration_5_cursor">5.1. Эту итерацию делал Cursor. А мы проверим.</a>
+
+По этой итерации всё [спланировал](./prometheus_grafana_demo_coverage_50cc4d75.plan.md), сконструировал и задокументировал **Cursor**. Мои компетенции позволили мне всего лишь согласиться с ним на доверии.
+
+Тем не менее я всё добросовестно-поверхностно изучил и протестировал :)
+
+Добавились новые сервисы в compose-проект: `prometheus`, `grafana`, `cadvisor`, `blackbox-exporter`, `postgres-exporter`, `kafka-exporter`.
+
+```
+
+spark-master
+spark-worker
+stage-broker-2
+stage-broker-3
+stage-controller-2
+stage-controller-3
+mart-broker-3
+mart-controller-2
+mart-controller-3
+stage-controller-1
+mart-broker-1
+mart-broker-2
+mart-controller-1
+stage-broker-1
+topic-creation
+mirror-maker
+schema-registry
+schemas-registrator
+spark-recommendations-job
+prometheus
+grafana
+ksqldb-server
+ksqldb-bootstrap
+cadvisor
+postgres
+kafka-connect
+connectors-registrator
+ksqldb-cli
+shop-api-app
+postgres-exporter
+blackbox-exporter
+kafka-exporter
+kafka-ui
+
+
+--services
+
+postgres
+
+stage-controller-1, stage-controller-2, stage-controller-3
+stage-broker-1, stage-broker-2, stage-broker-3
+
+mart-controller-1, mart-controller-2, mart-controller-3
+mart-broker-1, mart-broker-2, mart-broker-3
+
+mirror-maker
+schema-registry
+kafka-connect
+kafka-ui
+
+spark-master, spark-worker, spark-recommendations-job
+
+ksqldb-server, ksqldb-cli
+
+topic-creation, schemas-registrator, connectors-registrator, ksqldb-bootstrap
+
+shop-api-app
+
+
+--networks
+
+ya-kafka-pf-stage
+ya-kafka-pf-mart
+```
+
+Потребление ресурсов сразу после запуска:
+
+```bash
+sudo docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}\t{{.NetIO}}"
+```
+
+| NAME | CPU % | MEM USAGE | MEM LIMIT | MEM % | NET I/O |
+|------|-------|-----------|-----------|-------|---------|
+| shop-api-app | 0.35% | 84.03MiB | 31.27GiB | 0.26% | 2.34MB / 1.16MB |
+| kafka-ui | 0.02% | 209.3MiB | 1GiB | 20.44% | 1.96MB / 222kB |
+| ksqldb-cli | 0.06% | 150.7MiB | 1GiB | 14.71% | 10.5kB / 252B |
+| kafka-connect | 3.33% | 971MiB | 2GiB | 47.41% | 3.18MB / 3MB |
+| spark-recommendations-job | 0.08% | 502.8MiB | 1.5GiB | 32.74% | 61.8MB / 118MB |
+| ksqldb-server | 0.58% | 623.2MiB | 1.5GiB | 40.57% | 3.61MB / 4.45MB |
+| mirror-maker | 0.14% | 161.7MiB | 1GiB | 15.79% | 1.35MB / 1.15MB |
+| schema-registry | 0.17% | 251.1MiB | 512MiB | 49.04% | 760kB / 644kB |
+| spark-worker | 0.05% | 437.8MiB | 1.5GiB | 28.51% | 117MB / 309kB |
+| postgres-exporter | 0.00% | 8.25MiB | 31.27GiB | 0.03% | 1.69MB / 826kB |
+| grafana | 0.03% | 54.46MiB | 512MiB | 10.64% | 54kB / 17.2kB |
+| mart-controller-1 | 0.33% | 246.9MiB | 512MiB | 48.22% | 1.74MB / 1.01MB |
+| stage-broker-1 | 0.73% | 691.7MiB | 1GiB | 67.55% | 5.07MB / 6.01MB |
+| stage-controller-3 | 0.36% | 248.2MiB | 512MiB | 48.48% | 1.77MB / 1.04MB |
+| mart-broker-2 | 0.74% | 685.5MiB | 1GiB | 66.94% | 5.1MB / 4.37MB |
+| mart-broker-1 | 0.74% | 787.6MiB | 1GiB | 76.91% | 4.58MB / 4.46MB |
+| mart-broker-3 | 0.76% | 643.9MiB | 1GiB | 62.89% | 4.41MB / 4.04MB |
+| stage-broker-3 | 0.78% | 657.8MiB | 1GiB | 64.24% | 5.27MB / 5.72MB |
+| stage-controller-2 | 0.56% | 345.7MiB | 512MiB | 67.52% | 4.78MB / 7.85MB |
+| spark-master | 0.03% | 189.6MiB | 1.5GiB | 12.35% | 123kB / 17.2kB |
+| stage-controller-1 | 0.34% | 248.8MiB | 512MiB | 48.60% | 1.77MB / 1.04MB |
+| stage-broker-2 | 3.12% | 809.5MiB | 1GiB | 79.05% | 5.17MB / 5.84MB |
+| blackbox-exporter | 0.00% | 10.72MiB | 31.27GiB | 0.03% | 115kB / 117kB |
+| prometheus | 0.00% | 184.8MiB | 512MiB | 36.10% | 17.5MB / 394kB |
+| cadvisor | 1.96% | 132.1MiB | 256MiB | 51.62% | 292kB / 16.5MB |
+| mart-controller-3 | 0.64% | 309.8MiB | 512MiB | 60.51% | 4.73MB / 7.78MB |
+| mart-controller-2 | 0.33% | 243.9MiB | 512MiB | 47.63% | 1.74MB / 1.01MB |
+| postgres | 0.00% | 35.38MiB | 1GiB | 3.45% | 356kB / 1.63MB |
+
+Проверяем работоспособность: зададим стоп-слово, зальём данные в пайплайн и проверим, сделаем поиск, и проверим что что-то ищется и появились рекомендации.
+
+```bash
+sudo docker exec shop-api-app faust -A shop_api.app block-word --word глуп --block True
+
+cp ./shop_api_fixtures/* ./kafka-connect/data/shop_api_stage
+
+# выполним это неспешно несколько раз, с перерывами в пару секунд
+curl -s http://localhost:6077/search-good-by-name/11/%D1%83%D0%BC%D0%BD && \
+curl -s http://localhost:6077/search-good-by-name/11/%D0%B3%D0%BB%D1%83%D0%BF && \
+curl -s http://localhost:6077/search-good-by-name/22/%D1%83%D0%BC%D0%BD && \
+curl -s http://localhost:6077/search-good-by-name/22/%D0%B3%D0%BB%D1%83%D0%BF && \
+curl -s http://localhost:6077/search-good-by-name/33/boo && \
+curl -s http://localhost:6077/search-good-by-name/33/moo && \
+curl -s http://localhost:6077/search-good-by-name/22/zoo && \
+curl -s http://localhost:6077/search-good-by-name/22/woo
+
+# Делаем http-запросы к операции `get-recommendations`.
+
+```bash
+curl -s http://localhost:6077/get-recommendations/11 | jq
+
+curl -s http://localhost:6077/get-recommendations/22 | jq
+
+curl -s http://localhost:6077/get-recommendations/777 | jq
+```
+
+С основным функционалом всё в порядке.
+
+**1. Смотрим Prometheus → Status → Targets**: `http://localhost:19090`:
+
+У меня это `http://192.168.100.225:19090/targets?search=`.
+
+О... вижу два красненьких таргета со стейтом DOWN. Ендпойнты `http://kafka-exporter:9308/metrics` и `http://shop-api-app:6077/metrics`.
+
+Разбираемся с мониторингом, так как по `sudo docker ps -a` все сервисы у нас живы-здоровы.
+
+Уточнение по инциденту:
+- **kafka-exporter** не должен быть в сети mart — только в **stage** (как shop-api): иначе multi-homed DNS мог уводить TCP на неверный адрес → `connection refused`, процесс падает с FATAL, контейнер перезапускается и Prometheus видит «DNS misbehaving». Плюс `depends_on` на трёх stage-брокерах.
+- **/metrics** у shop-api: ответ через `web.bytes`, `content_type` **без** `charset` (ограничение aiohttp).
+
+Смотрим `http://192.168.100.225:19090/targets?search=`. - все ендпойнты зелёненькие.
+
+**2. Prometheus → Graph:**
+
+`http://192.168.100.225:19090/`
+
+- `up`
+
+```
+up{instance="postgres-exporter:9187", job="postgres_exporter"} | 1
+up{instance="http://ksqldb-server:8088/info", job="blackbox_ksql"} | 1
+up{instance="cadvisor:8080", job="cadvisor"} | 1
+up{instance="kafka-exporter:9308", job="kafka_exporter_stage"} | 1
+up{instance="localhost:9090", job="prometheus"} | 1
+up{instance="http://shop-api-app:6077/get-block-words/", job="blackbox_shop_api"} | 1
+up{instance="shop-api-app:6077", job="shop_api"} | 1
+up{instance="kafka-connect:9876", job="kafka_connect_jmx"} | 1
+```
+- `probe_success{job="blackbox_ksql"}`
+
+```
+probe_success{instance="http://ksqldb-server:8088/info", job="blackbox_ksql"} | 1
+```
+
+- `kafka_brokers`
+
+```
+kafka_brokers{instance="kafka-exporter:9308", job="kafka_exporter_stage"} | 3
+```
+
+- `pg_up`
+
+```
+pg_up{instance="postgres-exporter:9187", job="postgres_exporter"} | 1
+```
+
+- `jvm_memory_used_bytes`
+
+```
+jvm_memory_used_bytes{area="heap", instance="kafka-connect:9876", job="kafka_connect_jmx"} | 461904888
+jvm_memory_used_bytes{area="nonheap", instance="kafka-connect:9876", job="kafka_connect_jmx"} | 192610048
+```
+
+- `shop_api_search_good_by_name_total`
+
+```
+shop_api_search_good_by_name_total{instance="shop-api-app:6077", job="shop_api"} | 24
+```
+
+**3. Grafana:**
+
+`http://192.168.100.225:3000 admin:admin`
+
+`http://192.168.100.225:3000/dashboards`
+
+- дашборд **«YA Kafka — обзор мониторинга»**
+
+`http://192.168.100.225:3000/d/ya-kafka-overview/ya-kafka-e28094-obzor-monitoringa`
+
+таблица `up`:
+
+`Prometheus targets (up)`:
+
+| Time | __name__ | instance | job | Value |
+|------|----------|----------|-----|-------|
+| 2026-04-03 19:52:04.705 | up | postgres-exporter:9187 | postgres_exporter | 1 |
+| 2026-04-03 19:52:04.705 | up | http://ksqldb-server:8088/info | blackbox_ksql | 1 |
+| 2026-04-03 19:52:04.705 | up | cadvisor:8080 | cadvisor | 1 |
+| 2026-04-03 19:52:04.705 | up | kafka-exporter:9308 | kafka_exporter_stage | 1 |
+| 2026-04-03 19:52:04.705 | up | localhost:9090 | prometheus | 1 |
+| 2026-04-03 19:52:04.705 | up | http://shop-api-app:6077/get-block-words/ | blackbox_shop_api | 1 |
+| 2026-04-03 19:52:04.705 | up | shop-api-app:6077 | shop_api | 1 |
+| 2026-04-03 19:52:04.705 | up | kafka-connect:9876 | kafka_connect_jmx | 1 |
+
+`blackbox ksql`: Blackbox ksqlDB (1=OK): 1
+
+`kafka_brokers`: Kafka brokers (kafka_exporter): 3
+
+**curl -sS "http://127.0.0.1:6077/metrics" | head**:
+
+```
+curl -sS "http://127.0.0.1:6077/metrics" | head
+
+# HELP python_gc_objects_collected_total Objects collected during gc
+# TYPE python_gc_objects_collected_total counter
+python_gc_objects_collected_total{generation="0"} 1360.0
+python_gc_objects_collected_total{generation="1"} 288.0
+python_gc_objects_collected_total{generation="2"} 56.0
+# HELP python_gc_objects_uncollectable_total Uncollectable objects found during GC
+# TYPE python_gc_objects_uncollectable_total counter
+python_gc_objects_uncollectable_total{generation="0"} 0.0
+python_gc_objects_uncollectable_total{generation="1"} 0.0
+python_gc_objects_uncollectable_total{generation="2"} 0.0
+```
+
+**Алерт**
+
+```
+sudo docker stop ksqldb-server
+```
+
+- `http://192.168.100.225:19090/alerts?search=`:
+
+красное `KsqlDBBlackboxDown (1 active)`
+...
+
+
+- `http://192.168.100.225:3000/d/ya-kafka-overview/ya-kafka-e28094-obzor-monitoringa?orgId=1&from=now-1h&to=now&timezone=browser`:
+
+Prometheus / Grafana alerts (если настроены)
+
+Красное KsqlDBBlackboxDown
+...
+
+**Ну... Оно работает.**
+
+
+### <a name="dev_proc_iteration_5_structure">5.2. Структура мониторинга</a>
+
+Стек поднимается тем же [`compose.yaml`](compose.yaml), что и приложения. Конфигурации лежат в каталоге [`monitoring/`](monitoring): Prometheus (`prometheus.yml`, `alerts.yml`), blackbox (`blackbox/`), Grafana provisioning и дашборд «обзор» (`grafana/`). Образ **kafka-exporter** собирается из [`monitoring/kafka-exporter`](monitoring/kafka-exporter) (TLS/SASL как у клиента Kafka). В **Kafka Connect** включён **JMX javaagent** (файлы в [`kafka-connect/jmx`](kafka-connect/jmx), артефакт в образе по [`kafka-connect/Dockerfile`](kafka-connect/Dockerfile)).
+
+| Компонент | Роль | Как достучаться (по умолчанию из `.env.example`) |
+|-----------|------|--------------------------------------------------|
+| Prometheus | сбор и правила алертов | по умолчанию `http://localhost:19090` (`SERVICE_PROMETHEUS_PORT_EXPOSE`; не 9090 — порт занят mart-broker-3, `MB_3_PORT_90`) |
+| Grafana | дашборды, датасource Prometheus | `http://localhost:3000` (`SERVICE_GRAFANA_PORT_EXPOSE`); логин/пароль: `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` |
+| cAdvisor | CPU/RAM контейнеров | UI: `SERVICE_CADVISOR_PORT_EXPOSE` (9088→8080 в контейнере) |
+| blackbox-exporter | HTTP-probe к ksqlDB и shop-api | метрики на `SERVICE_BLACKBOX_EXPORTER_PORT_EXPOSE` |
+| postgres-exporter | метрики PostgreSQL | только scrape внутри Docker |
+| kafka-exporter | метрики stage | учётка **Kafka UI**; bootstrap в **compose** зашит как `SB_*_NAME:SB_*_PORT_91` (listener **CLIENT**), не из устаревшего `:92` в `.env` |
+| shop-api | `/metrics`, счётчик `shop_api_search_good_by_name_total` | порт `SHOP_API_WEB_PORT` |
+| kafka-connect | `/metrics` (JMX javaagent, порт 9876 в контейнере) | с хоста: `SERVICE_KAFKA_CONNECT_JMX_METRICS_PORT_EXPOSE` |
+
+Если меняете `SHOP_API_WEB_PORT` или имя контейнера shop-api, обновите job `shop_api` и `blackbox_shop_api` в [`monitoring/prometheus/prometheus.yml`](monitoring/prometheus/prometheus.yml).
+
+Пересборка образов после правок: `docker compose build kafka-connect kafka-exporter shop-api-app`.
+
+### <a name="dev_proc_iteration_5_alerting">5.3. Алертинг (учебный минимум)</a>
+
+Файл [`monitoring/prometheus/alerts.yml`](monitoring/prometheus/alerts.yml): **KsqlDBBlackboxDown** — `probe_success{job="blackbox_ksql"} == 0` дольше **1m**. Состояние: страница **Alerts** в Prometheus (`/alerts`). Дублирование правила в Grafana Unified Alerting с тем же PromQL — по желанию.
+
+### <a name="dev_proc_iteration_5_howto">5.4. Тестирование и воспроизведение работоспособности</a>
+
+1. **Prometheus → Status → Targets:** UI на хосте по `http://localhost:${SERVICE_PROMETHEUS_PORT_EXPOSE}` (в `.env.example` это **19090**, не 9090 — иначе конфликт с `MB_3_PORT_90` у mart-broker-3). Все перечисленные jobs в **UP** (при отказе kafka-exporter проверьте JKS/PKCS12 в `etc-kafka-secrets` и SASL для `SASL_UNAME_KAFKA_UI`).
+2. **Prometheus → Graph:** примеры запросов: `up`, `probe_success{job="blackbox_ksql"}`, `kafka_brokers`, `pg_up`, `jvm_memory_used_bytes`, `shop_api_search_good_by_name_total`.
+3. **Grafana:** дашборд **«YA Kafka — обзор мониторинга»** — таблица `up`, blackbox ksql, `kafka_brokers`.
+4. **`curl`:** `curl -sS "http://127.0.0.1:6077/metrics" | head` (при другом `SHOP_API_WEB_PORT` замените порт); `curl -sS "http://127.0.0.1:9876/metrics" | head` для Connect (если порт проброшен).
+5. **Алерт:** `docker stop ksqldb-server` → через **>1 мин** в Prometheus **Alerts** правило в **Firing** → `docker start ksqldb-server` → снятие алерта.
+6. **Негативно (по желанию):** `docker stop blackbox-exporter` — цель blackbox **DOWN** на `/targets`.

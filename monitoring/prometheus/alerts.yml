@@ -1,0 +1,12 @@
+groups:
+  - name: ya_kafka_demo
+    interval: 30s
+    rules:
+      - alert: KsqlDBBlackboxDown
+        expr: probe_success{job="blackbox_ksql"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "blackbox: ksqlDB /info недоступен"
+          description: "Модуль http_2xx к http://ksqldb-server:8088/info вернул ошибку или таймаут (см. Grafana/Prometheus)."

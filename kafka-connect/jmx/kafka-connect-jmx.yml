@@ -1,0 +1,7 @@
+# JMX → Prometheus для Kafka Connect (javaagent). Ядро + kafka.connect.
+lowercaseOutputName: true
+whitelistObjectNames:
+  - "java.lang:*"
+  - "kafka.connect:*"
+rules:
+  - pattern: ".*"

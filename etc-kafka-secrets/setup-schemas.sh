@@ -41,7 +41,7 @@ for SUBJECT in "${SUBJECTS[@]}"; do
   if [[ "${IS_COMPATIBLE,,}" == "true" ]]; then
     echo "Схема прошла проверку $COMPATIBILITY_LEVEL."
     
-    # 4. Регистрацыя
+    # 4. Регистрация
     REG_RESULT=$(do_schema_registry_rest_curl POST "/subjects/$SUBJECT/versions" "$JSON_BODY")
     # NEW_ID=$(echo "$REG_RESULT" | jq -r '.id')
     NEW_ID=$(echo "$REG_RESULT" | python3 -c "import sys, json; print(json.load(sys.stdin).get('id', 'error'))")

@@ -141,7 +141,9 @@ x-kafka_broker:
   KAFKA_TRANSACTION_PARTITION_VERIFICATION_ENABLE: "false"
   KAFKA_PRODUCER_ID_EXPIRATION_MS: 86400000
 
-  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: BROKER:SASL_SSL,CONTROLLER:SASL_SSL,INTERNAL:SASL_SSL
+  # CLIENT: SASL_SSL на *_PORT_91 с advertised = hostname брокера — клиенты в Docker-сети (kafka_exporter и т.д.),
+  # без привязки к localhost в metadata (см. KAFKA_ADVERTISED_LISTENERS у брокеров).
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: BROKER:SASL_SSL,CONTROLLER:SASL_SSL,INTERNAL:SASL_SSL,CLIENT:SASL_SSL
   KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
   KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
   # в след. строке можно на время разработки выставить true просто для удобства демо-проекта
@@ -373,8 +375,8 @@ services:
 
       CLUSTER_ID: ${CLUSTER_ID_STAGE}
       KAFKA_NODE_ID: ${SB_1_NODE_ID}
-      KAFKA_LISTENERS: BROKER://:${SB_1_PORT_90},INTERNAL://:${SB_1_PORT_92}
-      KAFKA_ADVERTISED_LISTENERS: BROKER://localhost:${SB_1_PORT_90},INTERNAL://${SB_1_NAME}:${SB_1_PORT_92}
+      KAFKA_LISTENERS: BROKER://:${SB_1_PORT_90},INTERNAL://:${SB_1_PORT_92},CLIENT://:${SB_1_PORT_91}
+      KAFKA_ADVERTISED_LISTENERS: BROKER://localhost:${SB_1_PORT_90},INTERNAL://${SB_1_NAME}:${SB_1_PORT_92},CLIENT://${SB_1_NAME}:${SB_1_PORT_91}
 
     volumes:
       - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
@@ -400,8 +402,8 @@ services:
 
       CLUSTER_ID: ${CLUSTER_ID_STAGE}
       KAFKA_NODE_ID: ${SB_2_NODE_ID}
-      KAFKA_LISTENERS: BROKER://:${SB_2_PORT_90},INTERNAL://:${SB_2_PORT_92}
-      KAFKA_ADVERTISED_LISTENERS: BROKER://localhost:${SB_2_PORT_90},INTERNAL://${SB_2_NAME}:${SB_2_PORT_92}
+      KAFKA_LISTENERS: BROKER://:${SB_2_PORT_90},INTERNAL://:${SB_2_PORT_92},CLIENT://:${SB_2_PORT_91}
+      KAFKA_ADVERTISED_LISTENERS: BROKER://localhost:${SB_2_PORT_90},INTERNAL://${SB_2_NAME}:${SB_2_PORT_92},CLIENT://${SB_2_NAME}:${SB_2_PORT_91}
 
     volumes:
       - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
@@ -427,8 +429,8 @@ services:
 
       CLUSTER_ID: ${CLUSTER_ID_STAGE}
       KAFKA_NODE_ID: ${SB_3_NODE_ID}
-      KAFKA_LISTENERS: BROKER://:${SB_3_PORT_90},INTERNAL://:${SB_3_PORT_92}
-      KAFKA_ADVERTISED_LISTENERS: BROKER://localhost:${SB_3_PORT_90},INTERNAL://${SB_3_NAME}:${SB_3_PORT_92}
+      KAFKA_LISTENERS: BROKER://:${SB_3_PORT_90},INTERNAL://:${SB_3_PORT_92},CLIENT://:${SB_3_PORT_91}
+      KAFKA_ADVERTISED_LISTENERS: BROKER://localhost:${SB_3_PORT_90},INTERNAL://${SB_3_NAME}:${SB_3_PORT_92},CLIENT://${SB_3_NAME}:${SB_3_PORT_91}
 
     volumes:
       - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
@@ -538,8 +540,8 @@ services:
 
       CLUSTER_ID: ${CLUSTER_ID_MART}
       KAFKA_NODE_ID: ${MB_1_NODE_ID}
-      KAFKA_LISTENERS: BROKER://:${MB_1_PORT_90},INTERNAL://:${MB_1_PORT_92}
-      KAFKA_ADVERTISED_LISTENERS: BROKER://localhost:${MB_1_PORT_90},INTERNAL://${MB_1_NAME}:${MB_1_PORT_92}
+      KAFKA_LISTENERS: BROKER://:${MB_1_PORT_90},INTERNAL://:${MB_1_PORT_92},CLIENT://:${MB_1_PORT_91}
+      KAFKA_ADVERTISED_LISTENERS: BROKER://localhost:${MB_1_PORT_90},INTERNAL://${MB_1_NAME}:${MB_1_PORT_92},CLIENT://${MB_1_NAME}:${MB_1_PORT_91}
 
     volumes:
       - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
@@ -565,8 +567,8 @@ services:
 
       CLUSTER_ID: ${CLUSTER_ID_MART}
       KAFKA_NODE_ID: ${MB_2_NODE_ID}
-      KAFKA_LISTENERS: BROKER://:${MB_2_PORT_90},INTERNAL://:${MB_2_PORT_92}
-      KAFKA_ADVERTISED_LISTENERS: BROKER://localhost:${MB_2_PORT_90},INTERNAL://${MB_2_NAME}:${MB_2_PORT_92}
+      KAFKA_LISTENERS: BROKER://:${MB_2_PORT_90},INTERNAL://:${MB_2_PORT_92},CLIENT://:${MB_2_PORT_91}
+      KAFKA_ADVERTISED_LISTENERS: BROKER://localhost:${MB_2_PORT_90},INTERNAL://${MB_2_NAME}:${MB_2_PORT_92},CLIENT://${MB_2_NAME}:${MB_2_PORT_91}
 
     volumes:
       - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
@@ -592,8 +594,8 @@ services:
 
       CLUSTER_ID: ${CLUSTER_ID_MART}
       KAFKA_NODE_ID: ${MB_3_NODE_ID}
-      KAFKA_LISTENERS: BROKER://:${MB_3_PORT_90},INTERNAL://:${MB_3_PORT_92}
-      KAFKA_ADVERTISED_LISTENERS: BROKER://localhost:${MB_3_PORT_90},INTERNAL://${MB_3_NAME}:${MB_3_PORT_92}
+      KAFKA_LISTENERS: BROKER://:${MB_3_PORT_90},INTERNAL://:${MB_3_PORT_92},CLIENT://:${MB_3_PORT_91}
+      KAFKA_ADVERTISED_LISTENERS: BROKER://localhost:${MB_3_PORT_90},INTERNAL://${MB_3_NAME}:${MB_3_PORT_92},CLIENT://${MB_3_NAME}:${MB_3_PORT_91}
 
     volumes:
       - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}
@@ -983,9 +985,8 @@ services:
     ports:
       # REST API Kafka Connect
       - "${SERVICE_KAFKA_CONNECT_REST_PORT_EXPOSE}:${SERVICE_KAFKA_CONNECT_REST_PORT}"
-      # JMX for Prometheus: 9875, 9876
-      # - "9875:9875"
-      # - "9876:9876"
+      # JMX Prometheus javaagent → HTTP /metrics
+      - "${SERVICE_KAFKA_CONNECT_JMX_METRICS_PORT_EXPOSE:-9876}:9876"
     deploy:
       resources:
         limits:
@@ -1052,9 +1053,7 @@ services:
       # согласоввывай с SERVICE_KAFKA_CONNECT_LIMIT_MEMORY, etc.
       KAFKA_HEAP_OPTS: "${SERVICE_KAFKA_CONNECT_HEAP_OPTS}"
 
-      # Export JMX metrics to :9876/metrics for Prometheus
-      # KAFKA_JMX_PORT: '9875'
-      # KAFKA_OPTS: "-javaagent:/opt/jmx_prometheus_javaagent-0.15.0.jar=9876:/opt/kafka-connect.yml"
+      KAFKA_OPTS: "-javaagent:/opt/jmx/jmx_prometheus_javaagent.jar=9876:/opt/jmx/kafka-connect-jmx.yml"
 
   # connectors-registrator
   connectors-registrator:
@@ -1211,7 +1210,6 @@ services:
     depends_on:
       topic-creation:
         condition: service_completed_successfully
-      # Имена сервисов в YAML (не из .env): совпадают с SERVICE_SCHEMA_REGISTRY_NAME / mart-broker-* по умолчанию
       schema-registry:
         condition: service_started
     ports:
@@ -1294,6 +1292,136 @@ services:
         reservations:
           memory: ${SERVICE_KSQLDB_CLI_RESERVE_MEMORY}
 
+  prometheus:
+    image: ${IMAGE_PROMETHEUS}
+    container_name: ${SERVICE_PROMETHEUS_NAME}
+    hostname: ${SERVICE_PROMETHEUS_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_STORAGE_RETENTION:-5d}
+      - --web.enable-lifecycle
+    ports:
+      - "${SERVICE_PROMETHEUS_PORT_EXPOSE}:${SERVICE_PROMETHEUS_PORT}"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - ${STAGE_CLUSTER_NETWORK}
+      - ${MART_CLUSTER_NETWORK}
+    deploy:
+      resources:
+        limits:
+          memory: ${SERVICE_PROMETHEUS_LIMIT_MEMORY}
+
+  cadvisor:
+    image: ${IMAGE_CADVISOR}
+    container_name: ${SERVICE_CADVISOR_NAME}
+    hostname: ${SERVICE_CADVISOR_NAME}
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - "${SERVICE_CADVISOR_PORT_EXPOSE}:${SERVICE_CADVISOR_PORT}"
+    networks:
+      - ${STAGE_CLUSTER_NETWORK}
+      - ${MART_CLUSTER_NETWORK}
+    deploy:
+      resources:
+        limits:
+          memory: ${SERVICE_CADVISOR_LIMIT_MEMORY}
+
+  blackbox-exporter:
+    image: ${IMAGE_BLACKBOX_EXPORTER}
+    container_name: ${SERVICE_BLACKBOX_EXPORTER_NAME}
+    hostname: ${SERVICE_BLACKBOX_EXPORTER_NAME}
+    command:
+      - --config.file=/config/blackbox.yml
+    volumes:
+      - ./monitoring/blackbox/blackbox.yml:/config/blackbox.yml:ro
+    ports:
+      - "${SERVICE_BLACKBOX_EXPORTER_PORT_EXPOSE}:${SERVICE_BLACKBOX_EXPORTER_PORT}"
+    networks:
+      - ${STAGE_CLUSTER_NETWORK}
+      - ${MART_CLUSTER_NETWORK}
+
+  postgres-exporter:
+    image: ${IMAGE_POSTGRES_EXPORTER}
+    container_name: ${SERVICE_POSTGRES_EXPORTER_NAME}
+    hostname: ${SERVICE_POSTGRES_EXPORTER_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
+    environment:
+      DATA_SOURCE_NAME: postgresql://${SERVICE_POSTGRES_USER}:${SERVICE_POSTGRES_PASSWORD}@postgres:${SERVICE_POSTGRES_PORT}/${SERVICE_POSTGRES_DB}?sslmode=disable
+    ports:
+      - "${SERVICE_POSTGRES_EXPORTER_PORT_EXPOSE}:${SERVICE_POSTGRES_EXPORTER_PORT}"
+    depends_on:
+      postgres:
+        condition: service_started
+    networks:
+      - ${STAGE_CLUSTER_NETWORK}
+      - ${MART_CLUSTER_NETWORK}
+
+  kafka-exporter:
+    build:
+      context: ./monitoring/kafka-exporter
+    container_name: ${SERVICE_KAFKA_EXPORTER_NAME}
+    hostname: ${SERVICE_KAFKA_EXPORTER_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
+    environment:
+      # Явно listener CLIENT (*_PORT_91). Иначе старый .env с :1092/:2092/:3092 даёт metadata на INTERNAL и refused.
+      KAFKA_EXPORTER_BOOTSTRAP: ${SB_1_NAME}:${SB_1_PORT_91},${SB_2_NAME}:${SB_2_PORT_91},${SB_3_NAME}:${SB_3_PORT_91}
+    volumes:
+      - ./etc-kafka-secrets:${CONTAINER_PATH_SECRETS}:ro
+    ports:
+      - "${SERVICE_KAFKA_EXPORTER_PORT_EXPOSE}:${SERVICE_KAFKA_EXPORTER_PORT}"
+    depends_on:
+      stage-broker-1:
+        condition: service_started
+      stage-broker-2:
+        condition: service_started
+      stage-broker-3:
+        condition: service_started
+    networks:
+      # Только stage (как shop-api). Bootstrap — CLIENT (*_PORT_91); не путать с inter-broker INTERNAL (:92).
+      - ${STAGE_CLUSTER_NETWORK}
+
+  grafana:
+    image: ${IMAGE_GRAFANA}
+    container_name: ${SERVICE_GRAFANA_NAME}
+    hostname: ${SERVICE_GRAFANA_NAME}
+    env_file:
+      - ${ENV_PATH:-.env}
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: ${GRAFANA_SERVER_ROOT_URL:-http://localhost:3000}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "${SERVICE_GRAFANA_PORT_EXPOSE}:${SERVICE_GRAFANA_PORT}"
+    depends_on:
+      - prometheus
+    networks:
+      - ${STAGE_CLUSTER_NETWORK}
+      - ${MART_CLUSTER_NETWORK}
+    deploy:
+      resources:
+        limits:
+          memory: ${SERVICE_GRAFANA_LIMIT_MEMORY}
+
 networks:
   ya-kafka-pf-stage:
     name: ${STAGE_CLUSTER_NETWORK}_network
@@ -1321,3 +1449,5 @@ volumes:
   spark_recommendations_checkpoint:
   shop-api-app_data:
   ksqldb_server_extensions:
+  prometheus_data:
+  grafana_data:

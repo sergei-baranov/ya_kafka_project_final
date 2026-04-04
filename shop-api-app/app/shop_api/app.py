@@ -131,3 +131,5 @@ SSL_CONFIG = {
     'key': key_f_path,
     'url': os.getenv('SCHEMA_REGISTRY_REST_URL_INNER', 'https://schema-registry:8081')
 }
+
+from . import pages  # noqa: E402,F401 — регистрация /metrics и HTTP view
