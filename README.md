@@ -5,6 +5,7 @@
 - [Общее описание](#general_descr_descr)
 - [Используемые технологии](#general_descr_technologies)
 - [Схема структуры проекта по сервисам, дата-пайплайнам](#general_descr_schema)
+- [Зависимости сервисов](#general_descr_services_depends_on)
 - [Инициализационный слой структуры проекта по сервисам (Bootstrap)](#general_descr_init_layer)
   - [SSL(mTLS)/SASL](#init_layer_ssl_sasl)
   - [Сервис topic-creation: предсоздание Kafka-топиков, ACL; admin-client.properties](#init_layer_topic_creation)
@@ -25,7 +26,6 @@
   - [Поиск товаров по названию](#data_pipelines_search_goods)
   - [Формирование рекомендаций: Spark Structured Streaming Job (PySpark)](#data_pipelines_make_recommendations)
   - [Получение рекомендаций (Faust + ksqlDB)](#data_pipelines_get_recommendations)
-- [Зависимости сервисов](#general_descr_services_depends_on)
 - [Техдолг и т.п.](#general_descr_todo)
 - [Как проверять проект](#general_assignment_review)
 - [Быстрая проверка](#fast_assignment_review)
@@ -117,6 +117,10 @@
 ## <a name="general_descr_schema">Схема структуры проекта по сервисам, дата-пайплайнам</a>
 
 ![ya_kafka_project_final](./ya_kafka_project_final.drawio.png)
+
+## <a name="general_descr_services_depends_on">Зависимости сервисов</a>
+
+![ya_kafka_final_depens_on.drawio.png](./ya_kafka_final_depens_on.drawio.png)
 
 ## <a name="general_descr_init_layer">Инициализационный слой структуры проекта по сервисам (Bootstrap)</a>
 
@@ -392,10 +396,6 @@ Job: `./spark/recommendations_job.py` читает топик `client-api-search
 Таблица эта в конечном счёте связана с топиком `client-recommendations` на `mart`-кластере Kafka (см. [Сервис ksqldb-bootstrap: предсоздание стрима и таблицы](#init_layer_ksqldb_bootstrap)).
 
 Чтение avro-схем ksqlDB делает сам, настройки для связи со Schema Registry прописаны у сервиса `ksqldb-server` в `compose.yaml`.
-
-## <a name="general_descr_services_depends_on">Зависимости сервисов</a>
-
-![ya_kafka_final_depens_on.drawio.png](./ya_kafka_final_depens_on.drawio.png)
 
 ## <a name="general_descr_todo">Техдолг и т.п.</a>
 
