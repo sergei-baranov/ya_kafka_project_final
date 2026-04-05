@@ -23,7 +23,7 @@
     - [Phase 3: Content Filtering & Moderation + репликация на mart-кластер](#data_pipelines_goods_filtering)
     - [Phase 4: Async Data Snapshot Materialization (Search Store Sink)](#data_pipelines_search_store_sink)
   - [Поиск товаров по названию](#data_pipelines_search_goods)
-  - [Формирование рекомендаций: Spark Structured Streaming Job (PySpark) + ksqlDB](#data_pipelines_make_recommendations)
+  - [Формирование рекомендаций: Spark Structured Streaming Job (PySpark)](#data_pipelines_make_recommendations)
   - [Получение рекомендаций (Faust + ksqlDB)](#data_pipelines_get_recommendations)
 - [Зависимости сервисов](#general_descr_services_depends_on)
 - [Техдолг и т.п.](#general_descr_todo)
@@ -379,13 +379,21 @@ Http-операция `search-good-by-name` формирует и записыв
 
 Avro-схемы в Schema Registry, настройка Mirror Maker, топики Кафки, таблица Постгреса, доступы и т.п. - всё полготавливается на Bootstrap-фазе развёртывания проекта и тоже описано выше.
 
-###  <a name="data_pipelines_make_recommendations">Формирование рекомендаций: Spark Structured Streaming Job (PySpark) + ksqlDB<a/>
+###  <a name="data_pipelines_make_recommendations">Формирование рекомендаций: Spark Structured Streaming Job (PySpark)<a/>
 
-TODO
+Job: `./spark/recommendations_job.py` читает топик `client-api-search`, пишет в топик `client-recommendations`, оба на `mart`-кластере Кафки.
+
+Всё было бы просто, если бы не avro... Но не стал убирать схему, чтобы на досуге покопать в это всё.
+
+Топик `client-recommendations` используется в выдаче Faust-операции `/get-recommendations` (через обработку в `ksqlDB`).
 
 ### <a name="data_pipelines_get_recommendations">Получение рекомендаций (Faust + ksqlDB)</a>
 
-TODO
+Есть http операция в фаусте, `/get-recommendations`. Она берёт данные в ksqlDB, в таблице `client_recommendations_latest`.
+
+Таблица эта в конечном счёте связана с топиком `client-recommendations` на `mart`-кластере Kafka (см. [Сервис ksqldb-bootstrap: предсоздание стрима и таблицы](#init_layer_ksqldb_bootstrap)).
+
+Чтение avro-схем ksqlDB делает сам, настройки для связи со Schema Registry прописаны у сервиса `ksqldb-server` в `compose.yaml`.
 
 ## <a name="general_descr_services_depends_on">Зависимости сервисов</a>
 
