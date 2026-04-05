@@ -21,7 +21,7 @@
     - [Phase 1: Trigger Event, Ingestion & Sanitization Layer (Kafka Connect)](#data_pipelines_goods_trigger_ingest)
     - [Phase 2: Schema Validation & DLQ Routing (Faust-streaming agent, Schema Registry)](#data_pipelines_goods_dlq)
     - [Phase 3: Content Filtering & Moderation + репликация на mart-кластер](#data_pipelines_goods_filtering)
-    - ...
+    - [Phase 4: Async Data Snapshot Materialization (Search Store Sink)](#data_pipelines_search_store_sink)
   - [Поиск товаров по названию](#data_pipelines_search_goods)
   - Формирование рекомендаций
   - Получение рекомендаций
@@ -345,7 +345,7 @@ TODO: Намутить так, чтобы при передачи False было
 
 **Тут же отметим:** Этот топик реплицируется на `mart`-кластер Кафки сервисов `mirror-maker`, что настраивается на Bootstrap-фазе развёртывания проекта (см. [Mirror Maker 1: настройки производит сам сервис mirror-maker](#init_layer_mirror_maker))
 
-#### Phase 4: Async Data Snapshot Materialization (Search Store Sink)
+#### <a name="data_pipelines_search_store_sink">Phase 4: Async Data Snapshot Materialization (Search Store Sink)</a>
 
 На этой логической фазе отфильтрованные сообщения отправляются, кроме топика `goods-filtered` в оба кластера Кафки, так же в таблицу `goods_filtered` в PostgreSQL (сервис `postgres` нашего compouse-проекта).
 
