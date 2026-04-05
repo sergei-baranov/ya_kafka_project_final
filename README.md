@@ -23,8 +23,8 @@
     - [Phase 3: Content Filtering & Moderation + репликация на mart-кластер](#data_pipelines_goods_filtering)
     - [Phase 4: Async Data Snapshot Materialization (Search Store Sink)](#data_pipelines_search_store_sink)
   - [Поиск товаров по названию](#data_pipelines_search_goods)
-  - Формирование рекомендаций
-  - Получение рекомендаций
+  - [Формирование рекомендаций: Spark Structured Streaming Job (PySpark) + ksqlDB](#data_pipelines_make_recommendations)
+  - [Получение рекомендаций (Faust + ksqlDB)](#data_pipelines_get_recommendations)
 - [Зависимости сервисов](#general_descr_services_depends_on)
 - [Техдолг и т.п.](#general_descr_todo)
 - [Как проверять проект](#general_assignment_review)
@@ -359,13 +359,31 @@ TODO: Намутить так, чтобы при передачи False было
 
 ### <a name="data_pipelines_search_goods">Поиск товаров по названию</a>
 
+Операция в Faust-приложении ищет товары в таблице PostgreSQL, пишет лог запросов в Кафка-топик и асинхронно формирует статистику, когерентную тому логу, в Постгрес.
+
+Http-операция `/search-good-by-name/{client}/{word}` (`app.py`, `search_good_by_name()`):
+- увеличивает счётчик в postgresql-таблице `client_api_search` для пары "покупатель+поисковое слово",
+- после чего ищет и возвращает записи в таблице `goods_filtered` такие, что `product_data ->> 'name' ILIKE` искомому слову.
+
+Поле `product_data` - `JSONB`-поле, с тригамным `GIN`-индексом на `product_data ->> 'name'`.
+
+Заполняется таблица фазой пайплайна, описанной в "[Phase 4: Async Data Snapshot Materialization (Search Store Sink)](data_pipelines_search_store_sink)".
+
+Таблица же `client_api_search`, что интересно, далее нигде на данный момент не используется :). Рекомендации покупателям далее формируются Spark-ом на основе топика `client-api-search`.
+
+Http-операция `search-good-by-name` формирует и записывает сообщения в топик `client-api-search` `stage`-кластера Kafka асинхронно записи в рсубд.
+
+Сообщения этого топика реплицируются в топик с тем же именем на `mart`-кластер Kafka вышеописанным сервисом `mirror-maker`. Далее этот топик как раз и используется в рекомендательной системе в текущей демо-реализации.
+
+Сообщение в топик `client-api-search` формируется в соответствии с avro-схемой `client-api-search-value`.
+
+Avro-схемы в Schema Registry, настройка Mirror Maker, топики Кафки, таблица Постгреса, доступы и т.п. - всё полготавливается на Bootstrap-фазе развёртывания проекта и тоже описано выше.
+
+###  <a name="data_pipelines_make_recommendations">Формирование рекомендаций: Spark Structured Streaming Job (PySpark) + ksqlDB<a/>
+
 TODO
 
-### Формирование рекомендаций
-
-TODO
-
-### Получение рекомендаций
+### <a name="data_pipelines_get_recommendations">Получение рекомендаций (Faust + ksqlDB)</a>
 
 TODO
 
